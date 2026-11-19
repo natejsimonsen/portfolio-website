@@ -306,39 +306,47 @@ main > section {
   margin: 1.5rem 0 var(--gap);
 }
 
-/* The 3D garden fills the window behind the page and stays put while the
-   text scrolls. On wide screens the rock sits in the right-hand margin and
-   the scene fades away behind the text column. When there is no room beside
-   the text (the script adds .space-low), the rock sits low in the window and
-   the whole scene is kept faint, strongest at the bottom. */
-.space {
+/* Two fixed layers sit behind the page while the text scrolls over them.
+   .space is the night sky, faded out behind the text column. .garden is
+   the small 3D box with the rock; the script places and sizes it: in the
+   right-hand margin on wide screens, or low in the window (.garden-low),
+   where it is kept faint because text passes over it. Its edges are
+   feathered so the box itself never shows. */
+.space,
+.garden {
   position: fixed;
-  inset: 0;
   z-index: -1;
+  pointer-events: none;
+}
+
+.space {
+  inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
   mask-image: linear-gradient(
     to right,
-    #000 calc(50% - var(--measure) / 2 - 8rem),
-    transparent calc(50% - var(--measure) / 2 - 1rem),
-    transparent calc(50% + var(--measure) / 2 + 1rem),
-    #000 calc(50% + var(--measure) / 2 + 4rem)
+    #000 calc(50% - var(--measure) / 2 - 6rem),
+    rgb(0 0 0 / 0.25) calc(50% - var(--measure) / 2 - 1rem),
+    rgb(0 0 0 / 0.25) calc(50% + var(--measure) / 2 + 1rem),
+    #000 calc(50% + var(--measure) / 2 + 6rem)
   );
 }
 
-/* Pale sand under grey text costs contrast, so by day the scene is fainter. */
-.space.space-low {
-  opacity: 0.2;
-  mask-image: linear-gradient(to bottom, transparent 45%, #000 85%);
+.garden {
+  mask-image: radial-gradient(closest-side, #000 86%, transparent 100%);
 }
 
-.space.space-low.space-night {
-  opacity: 0.36;
+/* Pale sand under grey text costs contrast, so by day the scene is fainter. */
+.garden.garden-low {
+  opacity: 0.22;
+}
+
+.garden.garden-low.garden-night {
+  opacity: 0.4;
 }
 
 /* Room for short pages to end above the rock. */
-body:has(.space-low) {
+body:has(.garden-low) {
   padding-bottom: 6rem;
 }
 
