@@ -307,8 +307,10 @@ main > section {
 }
 
 /* The 3D garden fills the window behind the page and stays put while the
-   text scrolls. On wide screens it fades out behind the text column; on
-   narrow ones the whole scene is kept faint. */
+   text scrolls. On wide screens the rock sits in the right-hand margin and
+   the scene fades away behind the text column. When there is no room beside
+   the text (the script adds .space-low), the rock sits low in the window and
+   the whole scene is kept faint, strongest at the bottom. */
 .space {
   position: fixed;
   inset: 0;
@@ -318,18 +320,21 @@ main > section {
   pointer-events: none;
   mask-image: linear-gradient(
     to right,
-    #000 calc(50% - var(--measure) / 2 - 12rem),
-    rgb(0 0 0 / 0.14) calc(50% - var(--measure) / 2 - 1rem),
-    rgb(0 0 0 / 0.14) calc(50% + var(--measure) / 2),
-    #000 calc(50% + var(--measure) / 2 + 7rem)
+    #000 calc(50% - var(--measure) / 2 - 8rem),
+    transparent calc(50% - var(--measure) / 2 - 1rem),
+    transparent calc(50% + var(--measure) / 2 + 1rem),
+    #000 calc(50% + var(--measure) / 2 + 4rem)
   );
 }
 
-@media (max-width: 60rem) {
-  .space {
-    opacity: 0.4;
-    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.5), #000 70%);
-  }
+.space.space-low {
+  opacity: 0.38;
+  mask-image: linear-gradient(to bottom, transparent 30%, #000 75%);
+}
+
+/* Room for short pages to end above the rock. */
+body:has(.space-low) {
+  padding-bottom: 6rem;
 }
 
 .ripples {
