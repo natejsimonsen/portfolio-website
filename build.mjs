@@ -19,8 +19,13 @@ const esc = (s) =>
 
 const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
-// Code blocks scroll sideways, so they must take keyboard focus.
-const markdown = (text) => marked.parse(text).replaceAll('<pre>', '<pre tabindex="0">');
+// Code blocks and wide tables scroll sideways, so they must take keyboard focus.
+const markdown = (text) =>
+  marked
+    .parse(text)
+    .replaceAll('<pre>', '<pre tabindex="0">')
+    .replaceAll('<table>', '<div class="table-scroll" tabindex="0" role="region" aria-label="Table"><table>')
+    .replaceAll('</table>', '</table></div>');
 
 // Front matter is optional: `key: value` lines between two `---` lines.
 function frontMatter(raw) {
@@ -115,12 +120,13 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/atom+xml" title="${esc(site.name)}" href="/feed.xml">
 <link rel="stylesheet" href="/style.css">
+<script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
 <a class="name" href="/">${esc(site.name)}</a>
-<nav aria-label="Main">${nav}</nav>
+<nav aria-label="Main">${nav}<button class="theme" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5Z"/></svg></button></nav>
 </header>
 <main id="main">
 ${body}
@@ -130,6 +136,31 @@ ${seal}
 <p>${esc(site.name)} · ${new Date().getUTCFullYear()}</p>
 <p><a href="/feed.xml">Feed</a></p>
 </footer>
+<script>
+// Light/dark toggle. With no saved choice the page follows the system.
+(() => {
+  const root = document.documentElement;
+  const button = document.querySelector('.theme');
+  const dark = matchMedia('(prefers-color-scheme: dark)');
+  const current = () => root.dataset.theme || (dark.matches ? 'dark' : 'light');
+  const label = () => button.setAttribute('aria-label', 'Switch to ' + (current() === 'dark' ? 'light' : 'dark') + ' theme');
+  button.hidden = false;
+  label();
+  dark.addEventListener('change', label);
+  button.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    // Choosing what the system already uses clears the override.
+    if (next === (dark.matches ? 'dark' : 'light')) {
+      delete root.dataset.theme;
+      try { localStorage.removeItem('theme'); } catch {}
+    } else {
+      root.dataset.theme = next;
+      try { localStorage.setItem('theme', next); } catch {}
+    }
+    label();
+  });
+})();
+</script>
 </body>
 </html>
 `;
@@ -194,7 +225,7 @@ ${posts.length > 5 ? '<p class="more"><a href="/blog/">All writing</a></p>' : ''
 
 <section id="contact" aria-labelledby="contact-h">
 <h2 id="contact-h">Contact</h2>
-<p class="prose">${esc(site.contactNote)}</p>
+<div class="prose"><p>${esc(site.contactNote)}</p></div>
 <ul class="contact">${contact}</ul>
 </section>`;
 }

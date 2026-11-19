@@ -25,7 +25,7 @@ Put images in `public/img/` and link them as `/img/name.png`.
 
 - `content/site.json`: name, tagline, projects, contact links.
 - `content/about.md`: the About section.
-- `src/style.css`: colors and type. Light and dark follow the system setting.
+- `src/style.css`: colors and type. Light and dark follow the system setting; the header toggle overrides it.
 - `src/art.mjs`: the generated SVG drawings.
 
 ## Run it

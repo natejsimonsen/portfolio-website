@@ -1,15 +1,16 @@
-/* Colors follow the system light or dark setting. There is no toggle. */
+/* Colors follow the system light or dark setting. The header toggle can
+   override it by setting data-theme on <html>. */
 :root {
   color-scheme: light dark;
-  --bg: #f6f3ec;
-  --ink: #1f1d1a;
-  --muted: #68635b;
-  --line: #dcd6c9;
-  --bed: #efeadd; /* the garden's sand */
-  --sand: #cdc5b4;
-  --stone: #8d877b;
-  --accent: #a83e29;
-  --code-bg: #ece8de;
+  --bg: light-dark(#f6f3ec, #151614);
+  --ink: light-dark(#1f1d1a, #e6e2d8);
+  --muted: light-dark(#68635b, #a09b90);
+  --line: light-dark(#dcd6c9, #2e2f2b);
+  --bed: light-dark(#efeadd, #1c1d1a); /* the garden's sand */
+  --sand: light-dark(#cdc5b4, #3a3b36);
+  --stone: light-dark(#8d877b, #6f6c64);
+  --accent: light-dark(#a83e29, #e57a61);
+  --code-bg: light-dark(#ece8de, #1f201d);
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -17,6 +18,7 @@
   --col: 14rem; /* label column in the project and contact lists */
   --rhythm: 3rem; /* space between sections */
   --gap: 1.25rem; /* space under a page heading */
+  --indent: 1.4rem; /* quotes and lists */
   --radius: 3px;
   --tap: 2.75rem; /* smallest hit area on touch screens */
   --label-size: 0.75rem;
@@ -25,18 +27,12 @@
   --shade: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #151614;
-    --ink: #e6e2d8;
-    --muted: #a09b90;
-    --line: #2e2f2b;
-    --bed: #1c1d1a;
-    --sand: #3a3b36;
-    --stone: #6f6c64;
-    --accent: #e57a61;
-    --code-bg: #1f201d;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 *,
@@ -79,7 +75,7 @@ a:hover {
 
 /* Small links get a 44px tall hit area without moving or restyling the text,
    so focus rings still hug the text. */
-.top nav a,
+.top a,
 .bottom a,
 .contact a,
 .pager a,
@@ -88,7 +84,7 @@ a:hover {
   position: relative;
 }
 
-.top nav a::after,
+.top a::after,
 .bottom a::after,
 .contact a::after,
 .pager a::after,
@@ -197,8 +193,51 @@ main > section > h2::before {
 
 .top nav {
   display: flex;
+  align-items: center;
   gap: 1.4rem;
   padding: 0.5rem 0;
+}
+
+/* Theme toggle: a half-filled circle. Hidden until the script enables it. */
+.theme {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.theme:hover {
+  color: var(--accent);
+}
+
+.theme::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: var(--tap);
+  height: var(--tap);
+  transform: translate(-50%, -50%);
+}
+
+.theme svg {
+  width: 100%;
+  height: 100%;
+}
+
+.theme circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.theme path {
+  fill: currentColor;
 }
 
 /* Chrome links (header nav, footer): muted, no underline, accent on hover. */
@@ -395,6 +434,7 @@ main > .posts:last-child li:last-child {
 
 .project-desc,
 .post-desc {
+  text-wrap: pretty;
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.5;
@@ -473,7 +513,7 @@ main > .posts:last-child li:last-child {
 .prose ol,
 .prose pre,
 .prose blockquote,
-.prose table,
+.prose .table-scroll,
 .prose figure {
   margin: 0 0 1.4rem;
 }
@@ -488,6 +528,11 @@ main > .posts:last-child li:last-child {
   font-size: 1.25rem;
 }
 
+.prose ul,
+.prose ol {
+  padding-left: var(--indent);
+}
+
 .prose li {
   margin: 0.3rem 0;
 }
@@ -497,7 +542,7 @@ main > .posts:last-child li:last-child {
 }
 
 .prose blockquote {
-  padding-left: 1.2rem;
+  padding-left: var(--indent);
   border-left: 2px solid var(--accent);
   color: var(--muted);
   font-style: italic;
@@ -558,12 +603,15 @@ main > .posts:last-child li:last-child {
   width: 4rem;
   margin: 2.6rem 0;
   border: 0;
-  border-top: 1px solid var(--stone);
+  border-top: 1px solid var(--line);
+}
+
+.prose .table-scroll {
+  overflow-x: auto;
 }
 
 .prose table {
-  display: block;
-  overflow-x: auto;
+  width: 100%;
   border-collapse: collapse;
   font-size: 1rem;
 }
@@ -657,5 +705,10 @@ main > .posts:last-child li:last-child {
   .contact li {
     grid-template-columns: 5.5rem 1fr;
     column-gap: 0;
+    padding: 0.6rem 0;
   }
+}
+
+.label .tag {
+  vertical-align: baseline;
 }

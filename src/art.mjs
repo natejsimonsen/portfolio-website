@@ -93,31 +93,38 @@ export function garden(seed) {
 function sand(seed, width, most) {
   const rand = rng(seed);
   const count = Math.min(most, 2 + Math.floor(rand() * 2));
+  const outer = gap * (rings + 0.5); // radius of the last raked ring
   const stones = [];
   for (let i = 0; i < count; i++) {
     const slot = width / count;
-    const r = between(rand, 8, 14);
-    const zone = r + 5 + (rings - 1) * gap + gap * 0.6; // raked rings end here
     stones.push({
       x: slot * i + between(rand, slot * 0.32, slot * 0.68),
-      y: between(rand, zone + 2, height - zone - 2),
-      r,
-      zone,
+      // Centred on a rake line, so the rings sit evenly between the lines.
+      y: gap / 2 + gap * (4 + Math.floor(rand() * 4)),
+      r: between(rand, 7.5, 10.5),
       turn: rand() * 6.28,
     });
   }
 
-  // Straight lines, lifted wherever they would cross a stone's rings.
+  // Straight lines that stop a steady half-gap short of each stone's rings.
   const phase = rand() * 6.28;
+  const wave = (x, base) => base + 0.6 * Math.sin(x / 110 + phase + base * 0.02);
   let d = '';
   for (let base = gap / 2; base < height; base += gap) {
-    let drawing = false;
-    for (let x = 0; x <= width; x += 6) {
-      const y = base + 0.9 * Math.sin(x / 110 + phase + base * 0.02);
-      const inside = stones.some((s) => ((x - s.x) / stretch) ** 2 + (y - s.y) ** 2 < s.zone ** 2);
-      if (!inside) d += `${drawing ? 'L' : 'M'}${n(x)} ${n(y)}`;
-      drawing = !inside;
+    let from = 0;
+    const stretchOf = (to) => {
+      if (to - from < 4) return;
+      for (let x = from; x < to; x += 8) d += `${x === from ? 'M' : 'L'}${n(x)} ${n(wave(x, base))}`;
+      d += `L${n(to)} ${n(wave(to, base))}`;
+    };
+    for (const s of stones) {
+      const dy = Math.abs(base - s.y);
+      if (dy >= outer) continue;
+      const half = stretch * Math.sqrt(outer * outer - dy * dy) + gap / 2;
+      stretchOf(s.x - half);
+      from = s.x + half;
     }
+    stretchOf(width);
   }
 
   const loop = (s, radius, wobble) => {
@@ -129,7 +136,7 @@ function sand(seed, width, most) {
     }
     return `${path}Z`;
   };
-  for (const s of stones) for (let k = 0; k < rings; k++) d += loop(s, s.r + 5 + k * gap, 0.025);
+  for (const s of stones) for (let k = 1; k <= rings; k++) d += loop(s, gap * (k + 0.5), 0.02);
 
   const blobs = stones.map((s) => `<path d="${loop(s, s.r, 0.07)}"/>`).join('');
   return `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`;
