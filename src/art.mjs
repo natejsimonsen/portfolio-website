@@ -100,7 +100,7 @@ function sand(seed, width, most) {
     stones.push({
       x: slot * i + between(rand, slot * 0.32, slot * 0.68),
       // Centred on a rake line, so the rings sit evenly between the lines.
-      y: gap / 2 + gap * (4 + Math.floor(rand() * 4)),
+      y: gap * (4 + Math.floor(rand() * 5)),
       r: between(rand, 7.5, 10.5),
       turn: rand() * 6.28,
     });
@@ -110,7 +110,7 @@ function sand(seed, width, most) {
   const phase = rand() * 6.28;
   const wave = (x, base) => base + 0.6 * Math.sin(x / 110 + phase + base * 0.02);
   let d = '';
-  for (let base = gap / 2; base < height; base += gap) {
+  for (let base = gap; base < height; base += gap) {
     let from = 0;
     const stretchOf = (to) => {
       if (to - from < 4) return;

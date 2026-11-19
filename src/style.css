@@ -70,6 +70,7 @@ a:hover {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+  scroll-margin-block: 1rem;
   border-radius: var(--radius);
 }
 
@@ -317,7 +318,7 @@ main > section {
 }
 
 .hero .enso {
-  align-self: center;
+  align-self: start; /* top lines up with the label on every page */
 }
 
 .enso .ink {
@@ -352,8 +353,8 @@ main > section {
 
 .ripples {
   flex: none;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
   fill: none;
   stroke: var(--stone);
   stroke-width: 1.1;
@@ -444,10 +445,11 @@ main > .posts:last-child li:last-child {
 .posts a {
   grid-template-columns: auto 1fr auto;
   align-items: start;
+  padding: 0.95rem 0; /* room for the ripple mark above the title line */
 }
 
 .posts .ripples {
-  margin-top: calc((1.2rem * 1.3 - 2.75rem) / 2);
+  margin-top: calc((1.2rem * 1.3 - 2.25rem) / 2); /* centred on the title line */
 }
 
 .post-text {
@@ -631,8 +633,6 @@ main > .posts:last-child li:last-child {
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   margin-top: var(--rhythm);
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
 }
 
 .pager a {
@@ -711,4 +711,8 @@ main > .posts:last-child li:last-child {
 
 .label .tag {
   vertical-align: baseline;
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: 0;
 }
