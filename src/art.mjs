@@ -1,5 +1,5 @@
 // Generated SVG drawings. Every shape is seeded, so the same seed always
-// draws the same picture and each blog post gets its own garden.
+// draws the same picture and each page gets its own garden.
 
 function rng(seed) {
   let h = 1779033703 ^ seed.length;
@@ -19,126 +19,81 @@ function rng(seed) {
 const n = (v) => v.toFixed(1);
 const between = (rand, lo, hi) => lo + rand() * (hi - lo);
 
-// Ensō: a brush circle that tapers and leaves a gap. The brush shape is a
-// filled outline; a thick dashed stroke in a mask reveals it as if painted.
-export function enso(seed, id = 'enso') {
-  const rand = rng(seed);
-  const c = 110;
-  const radius = 76;
-  const start = between(rand, -2.3, -1.9);
-  const sweep = between(rand, 5.55, 5.8);
-  const p1 = rand() * 6.28;
-  const p2 = rand() * 6.28;
-  const steps = 120;
+// The page background: a dry garden seen from above. Straight raked lines
+// cover the whole view, and rings are raked around groups of stones. It is
+// drawn twice from one seed: a wide one that keeps stones in the side
+// margins, clear of the text column, and a tall one for phones, where the
+// stones sit half off the edges and only their rings reach under the text.
+const gap = 14;
+const stretch = 1.12; // stones and their rings are a little wider than tall
 
-  const outer = [];
-  const inner = [];
-  const centre = [];
-  const at = (t, offset) => {
-    const angle = start + t * sweep;
-    const r = radius + 2.4 * Math.sin(t * 5 + p1) + 1.2 * Math.sin(t * 11 + p2) + offset;
-    return [c + r * Math.cos(angle), c + r * Math.sin(angle)];
-  };
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    let width = 3 + 11 * Math.pow(1 - t, 0.8) + 1.5 * Math.sin(t * 9 + p1);
-    if (t < 0.04) width *= Math.sqrt(t / 0.04);
-    if (t > 0.88) width *= Math.pow((1 - t) / 0.12, 0.7);
-    outer.push(at(t, width / 2));
-    inner.push(at(t, -width / 2));
-    centre.push(at(t, 0));
-  }
-  const line = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${n(x)} ${n(y)}`).join('');
-  const brush = `${line(outer)}${line(inner.reverse()).replace('M', 'L')}Z`;
-
-  // Dry-brush streaks: thin gaps in the tail of the stroke.
-  const streaks = [-2.6, 0.8, 3.4]
-    .map((offset) => {
-      const from = between(rand, 0.5, 0.62);
-      const pts = [];
-      for (let t = from; t <= 0.985; t += 0.01) pts.push(at(t, offset));
-      return `<path d="${line(pts)}" stroke="#000" stroke-width="${n(between(rand, 0.6, 1.2))}" fill="none"/>`;
-    })
-    .join('');
-
-  // Fit the box to the ink so the drawing lines up with the column edge.
-  const xs = [...outer, ...inner].map(([x]) => x);
-  const ys = [...outer, ...inner].map(([, y]) => y);
-  const x0 = Math.floor(Math.min(...xs)) - 1;
-  const y0 = Math.floor(Math.min(...ys)) - 1;
-  const w = Math.ceil(Math.max(...xs)) + 1 - x0;
-  const h = Math.ceil(Math.max(...ys)) + 1 - y0;
-
-  return `<svg class="enso" viewBox="${x0} ${y0} ${w} ${h}" role="img" aria-label="A brush-drawn circle">
-<mask id="${id}" maskUnits="userSpaceOnUse" x="${x0}" y="${y0}" width="${w}" height="${h}">
-<path class="draw" pathLength="1" d="${line(centre)}" stroke="#fff" stroke-width="36" fill="none"/>${streaks}
-</mask>
-<path class="ink" mask="url(#${id})" d="${brush}"/>
-</svg>`;
+export function backdrop(seed) {
+  return `<svg class="backdrop backdrop-wide" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${sand(seed, 1600, 1000, [[40, 370], [1230, 1560]], 7)}</svg>
+<svg class="backdrop backdrop-tall" viewBox="0 0 500 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${sand(seed, 500, 1000, [[14, 34], [466, 486]], 5)}</svg>`;
 }
 
-// A dry garden: straight raked lines, with rings raked around each stone.
-// It is drawn twice from one seed, wide and narrow, so phones get the same
-// line gap and stone size instead of a scaled-down picture.
-const height = 108;
-const gap = 9;
-const stretch = 1.15; // stones and their rings are a little wider than tall
-const rings = 3;
-
-export function garden(seed) {
-  return `<svg class="garden garden-wide" viewBox="0 0 720 ${height}" role="img" aria-label="A raked sand garden with stones">${sand(seed, 720, 3)}</svg>
-<svg class="garden garden-narrow" viewBox="0 0 360 ${height}" aria-hidden="true">${sand(seed, 360, 2)}</svg>`;
-}
-
-function sand(seed, width, most) {
+function sand(seed, width, height, zones, count) {
   const rand = rng(seed);
-  const count = Math.min(most, 2 + Math.floor(rand() * 2));
-  const outer = gap * (rings + 0.5); // radius of the last raked ring
+
+  // Place stones on rake lines, inside the allowed zones, without overlap.
   const stones = [];
-  for (let i = 0; i < count; i++) {
-    const slot = width / count;
-    stones.push({
-      x: slot * i + between(rand, slot * 0.32, slot * 0.68),
-      // Centred on a rake line, so the rings sit evenly between the lines.
-      y: gap * (4 + Math.floor(rand() * 5)),
-      r: between(rand, 7.5, 10.5),
+  for (let tries = 0; stones.length < count && tries < 400; tries++) {
+    const zone = zones[(stones.length + tries) % zones.length];
+    const rings = 2 + Math.floor(rand() * 4);
+    const stone = {
+      x: between(rand, zone[0], zone[1]),
+      y: gap * Math.round(between(rand, 6, height / gap - 6)),
+      r: between(rand, 9, 13) + rings * 1.6,
+      outer: gap * (rings + 1.5),
+      rings,
       turn: rand() * 6.28,
-    });
+    };
+    const clear = stones.every((s) => Math.hypot((s.x - stone.x) / stretch, s.y - stone.y) > s.outer + stone.outer + gap);
+    if (clear) stones.push(stone);
   }
 
-  // Straight lines that stop a steady half-gap short of each stone's rings.
+  // Straight lines that stop a steady half-gap short of each ring field.
   const phase = rand() * 6.28;
-  const wave = (x, base) => base + 0.6 * Math.sin(x / 110 + phase + base * 0.02);
+  const wave = (x, base) => base + 1.2 * Math.sin(x / 170 + phase + base * 0.013);
   let d = '';
   for (let base = gap; base < height; base += gap) {
-    let from = 0;
-    const stretchOf = (to) => {
-      if (to - from < 4) return;
-      for (let x = from; x < to; x += 8) d += `${x === from ? 'M' : 'L'}${n(x)} ${n(wave(x, base))}`;
-      d += `L${n(to)} ${n(wave(to, base))}`;
-    };
+    const cuts = [];
     for (const s of stones) {
       const dy = Math.abs(base - s.y);
-      if (dy >= outer) continue;
-      const half = stretch * Math.sqrt(outer * outer - dy * dy) + gap / 2;
-      stretchOf(s.x - half);
-      from = s.x + half;
+      if (dy >= s.outer) continue;
+      const half = stretch * Math.sqrt(s.outer * s.outer - dy * dy) + gap / 2;
+      cuts.push([s.x - half, s.x + half]);
     }
-    stretchOf(width);
+    cuts.sort((p, q) => p[0] - q[0]);
+    let from = 0;
+    const stroke = (to) => {
+      if (to - from < 6) return;
+      for (let x = from; x < to; x += 16) d += `${x === from ? 'M' : 'L'}${n(x)} ${n(wave(x, base))}`;
+      d += `L${n(to)} ${n(wave(to, base))}`;
+    };
+    for (const [start, end] of cuts) {
+      stroke(start);
+      from = Math.max(from, end);
+    }
+    stroke(width);
   }
 
-  const loop = (s, radius, wobble) => {
+  const loop = (s, radius, wobble, dx = 0, dy = 0) => {
     let path = '';
-    for (let i = 0; i < 36; i++) {
-      const angle = (i / 36) * 6.2832;
-      const r = radius * (1 + wobble * Math.sin(angle * 3 + s.turn));
-      path += `${i ? 'L' : 'M'}${n(s.x + r * stretch * Math.cos(angle))} ${n(s.y + r * Math.sin(angle))}`;
+    for (let i = 0; i < 40; i++) {
+      const angle = (i / 40) * 6.2832;
+      const r = radius * (1 + wobble * Math.sin(angle * 3 + s.turn) + wobble * 0.6 * Math.sin(angle * 5 - s.turn));
+      path += `${i ? 'L' : 'M'}${n(s.x + dx + r * stretch * Math.cos(angle))} ${n(s.y + dy + r * Math.sin(angle))}`;
     }
     return `${path}Z`;
   };
-  for (const s of stones) for (let k = 1; k <= rings; k++) d += loop(s, gap * (k + 0.5), 0.02);
-
-  const blobs = stones.map((s) => `<path d="${loop(s, s.r, 0.07)}"/>`).join('');
+  let blobs = '';
+  for (const s of stones) {
+    for (let k = 1; k <= s.rings; k++) d += loop(s, gap * (k + 0.5), 0.015);
+    blobs += `<path d="${loop(s, s.r, 0.08)}"/>`;
+    // Larger groups get a small companion stone tucked beside the big one.
+    if (s.rings >= 4) blobs += `<path d="${loop(s, s.r * 0.42, 0.1, s.r * 1.25, s.r * 0.55)}"/>`;
+  }
   return `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`;
 }
 

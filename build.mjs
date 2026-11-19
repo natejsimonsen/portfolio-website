@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { marked } from 'marked';
-import { enso, favicon, garden, ripples, seal } from './src/art.mjs';
+import { backdrop, favicon, ripples, seal } from './src/art.mjs';
 
 const root = path.dirname(new URL(import.meta.url).pathname);
 const out = path.join(root, 'dist');
@@ -123,6 +123,7 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
+${backdrop(url)}
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
 <a class="name" href="/">${esc(site.name)}</a>
@@ -202,15 +203,12 @@ function home(site, posts, about) {
 <h1>${esc(site.name)}</h1>
 <p class="lede">${esc(site.tagline)}</p>
 </div>
-${enso(site.name)}
 </section>
 
 <section id="about" aria-labelledby="about-h">
 <h2 id="about-h">About</h2>
 <div class="prose">${about}</div>
 </section>
-
-${garden('home')}
 
 <section id="projects" aria-labelledby="projects-h">
 <h2 id="projects-h">Projects</h2>
@@ -236,7 +234,6 @@ function blogIndex(posts) {
 <h1>Writing</h1>
 <p class="lede">Notes on infrastructure, tools, and whatever else holds my attention.</p>
 </section>
-${garden('writing')}
 ${postList(posts)}`;
 }
 
@@ -248,7 +245,6 @@ function postPage(post, newer, older) {
 <p class="label"><time datetime="${post.date}">${dateFormat.format(post.when)}</time> · ${post.minutes} min read${post.draft ? ' · <span class="tag">Draft</span>' : ''}</p>
 <h1>${esc(post.title)}</h1>
 </header>
-${garden(post.slug)}
 <div class="prose">${post.html}</div>
 </article>
 <nav class="pager" aria-label="More writing">
@@ -333,7 +329,7 @@ function build() {
       title: 'Not found',
       description: 'This page does not exist.',
       url: '/404.html',
-      body: `<section class="hero lost"><div><p class="label">404</p><h1>Nothing here</h1><p class="lede">This page does not exist. <a href="/">Go home</a>.</p></div>${enso('lost', 'lost')}</section>`,
+      body: `<section class="hero lost"><div><p class="label">404</p><h1>Nothing here</h1><p class="lede">This page does not exist. <a href="/">Go home</a>.</p></div></section>`,
     }),
   );
   write('feed.xml', feed(site, posts));

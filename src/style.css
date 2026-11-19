@@ -6,7 +6,6 @@
   --ink: light-dark(#1f1d1a, #e6e2d8);
   --muted: light-dark(#68635b, #a09b90);
   --line: light-dark(#dcd6c9, #2e2f2b);
-  --bed: light-dark(#efeadd, #1c1d1a); /* the garden's sand */
   --sand: light-dark(#cdc5b4, #3a3b36);
   --stone: light-dark(#8d877b, #6f6c64);
   --accent: light-dark(#a83e29, #e57a61);
@@ -42,6 +41,7 @@
 }
 
 html {
+  background: var(--bg);
   scroll-padding-top: 2rem;
   -webkit-text-size-adjust: 100%;
 }
@@ -50,7 +50,6 @@ body {
   margin: 0 auto;
   max-width: calc(var(--measure) + 3rem);
   padding: 0 1.5rem;
-  background: var(--bg);
   color: var(--ink);
   font: 1.1875rem/1.6 var(--serif);
   text-rendering: optimizeLegibility;
@@ -300,10 +299,6 @@ main > section {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: start;
-  gap: 2rem;
   margin-top: 1.5rem;
 }
 
@@ -311,45 +306,63 @@ main > section {
   margin: 1.5rem 0 var(--gap);
 }
 
-/* Drawings. Same size on every page at each width. */
-.enso {
-  width: clamp(6rem, 20vw, 9rem);
-  height: auto;
-}
-
-.hero .enso {
-  align-self: start; /* top lines up with the label on every page */
-}
-
-.enso .ink {
-  fill: var(--ink);
-}
-
-/* The garden adds no margin of its own between sections; under a page
-   heading it leaves the same gap below as the heading leaves above. */
-.garden {
-  display: block;
+/* The background garden fills the window behind the page and stays put
+   while the text scrolls. On wide screens it fades out behind the text
+   column; on narrow screens the whole drawing is kept faint. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   width: 100%;
-  height: auto;
-  margin: 0 0 var(--gap);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bed);
+  height: 100%;
+  pointer-events: none;
+  mask-image: linear-gradient(
+    to right,
+    #000 calc(50% - var(--measure) / 2 - 9rem),
+    rgb(0 0 0 / 0.22) calc(50% - var(--measure) / 2 - 1rem),
+    rgb(0 0 0 / 0.22) calc(50% + var(--measure) / 2 + 1rem),
+    #000 calc(50% + var(--measure) / 2 + 9rem)
+  );
 }
 
-.garden.garden-narrow {
+.backdrop-tall {
   display: none;
 }
 
-.garden .sand {
+.backdrop .sand {
   fill: none;
   stroke: var(--sand);
-  stroke-width: 1.2;
+  stroke-width: 1.3;
 }
 
-.garden .stones path {
+.backdrop .stones {
   fill: var(--stone);
 }
+
+/* Without wide side margins the stones move to the edges of the window. */
+@media (max-width: 60rem) {
+  .backdrop-wide {
+    display: none;
+  }
+
+  .backdrop-tall {
+    display: block;
+    opacity: 0.7;
+    mask-image: none;
+  }
+}
+
+/* On tablets the tall drawing is scaled up, so it is drawn lighter. */
+@media (min-width: 34rem) and (max-width: 60rem) {
+  .backdrop-tall {
+    opacity: 0.5;
+  }
+
+  .backdrop-tall .sand {
+    stroke-width: 0.8;
+  }
+}
+
 
 .ripples {
   flex: none;
@@ -364,25 +377,6 @@ main > section {
 .ripples circle {
   fill: var(--accent);
   stroke: none;
-}
-
-.draw {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: draw 1.2s cubic-bezier(0.6, 0.05, 0.25, 1) 0.1s forwards;
-}
-
-@keyframes draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .draw {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
 }
 
 /* Lists */
@@ -667,26 +661,6 @@ main > .posts:last-child li:last-child {
     gap: 1.1rem;
   }
 
-  .hero {
-    grid-template-columns: 1fr;
-    gap: 1.2rem;
-  }
-
-  .hero .enso {
-    order: -1;
-  }
-
-  .enso {
-    width: 5.25rem;
-  }
-
-  .garden.garden-wide {
-    display: none;
-  }
-
-  .garden.garden-narrow {
-    display: block;
-  }
 
   .projects a {
     grid-template-columns: 1fr;
