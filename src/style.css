@@ -321,12 +321,13 @@ main > section {
   pointer-events: none;
   opacity: 0;
   transition: opacity 1.4s ease;
+  /* a crisp edge just outside the text column, not a long fade */
   mask-image: linear-gradient(
     to right,
-    #000 calc(50% - var(--measure) / 2 - 7rem),
-    rgb(0 0 0 / 0.5) calc(50% - var(--measure) / 2),
-    rgb(0 0 0 / 0.5) calc(50% + var(--measure) / 2),
-    #000 calc(50% + var(--measure) / 2 + 7rem)
+    #000 calc(50% - var(--measure) / 2 - 2rem),
+    rgb(0 0 0 / 0.5) calc(50% - var(--measure) / 2 - 1.5rem),
+    rgb(0 0 0 / 0.5) calc(50% + var(--measure) / 2 + 1.5rem),
+    #000 calc(50% + var(--measure) / 2 + 2rem)
   );
 }
 

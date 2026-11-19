@@ -71,14 +71,21 @@ async function garden() {
   const sky = new THREE.HemisphereLight();
   scene.add(sun, sky);
 
-  // Five stones in two unequal groups, set on a diagonal: a host group of
-  // three (a tall master, a low companion, a small one) and a smaller guest
-  // group of two. On wide screens they keep to the sides, so the middle of
+  // Seven small stones in three unequal groups: a host group of three (a
+  // tall master, a low companion, a small one) and two guest pairs. On wide screens they keep to the sides, so the middle of
   // the sand, under the text, stays empty.
   const stones = [];
   const groups = wide
-    ? [{ at: [-0.64, 0.3], rings: 4, size: 1, three: true }, { at: [0.72, -0.38], rings: 3, size: 0.66, three: false }]
-    : [{ at: [-0.72, 0.58], rings: 3, size: 0.9, three: true }, { at: [0.72, -0.42], rings: 2, size: 0.6, three: false }];
+    ? [
+        { at: [-0.64, 0.3], rings: 3, size: 0.62, three: true },
+        { at: [0.72, -0.38], rings: 2, size: 0.5, three: false },
+        { at: [0.6, 0.62], rings: 2, size: 0.4, three: false },
+      ]
+    : [
+        { at: [-0.72, 0.58], rings: 3, size: 0.6, three: true },
+        { at: [0.72, -0.42], rings: 2, size: 0.48, three: false },
+        { at: [0.74, 0.14], rings: 1, size: 0.38, three: false },
+      ];
   groups.forEach((g, id) => {
     const x = g.at[0] * halfW + between(-0.25, 0.25);
     const z = g.at[1] * halfD + between(-0.3, 0.3);
@@ -87,7 +94,7 @@ async function garden() {
     const near = wide ? 1 : 0.75;
     stones.push({ x, z, r: 0.82 * k, group: id, model: id, tall: 1.4 });
     stones.push({ x: x + Math.cos(away) * 1.6 * k * near, z: z + Math.sin(away) * 1.6 * k * near, r: 0.42 * k, group: id, model: id + 3, tall: 0.75 });
-    if (g.three) stones.push({ x: x + Math.cos(away + 1.9) * 0.95 * near, z: z + Math.sin(away + 1.9) * 0.95 * near, r: 0.22, group: id, model: id + 1, tall: 1 });
+    if (g.three) stones.push({ x: x + Math.cos(away + 1.9) * 0.95 * k * near, z: z + Math.sin(away + 1.9) * 0.95 * k * near, r: 0.2 * k, group: id, model: id + 1, tall: 1 });
   });
   // Rings are raked round a whole group, like water round islands: each
   // stone's rings stop where they would enter a neighbour's.
@@ -234,40 +241,45 @@ async function garden() {
   sand.receiveShadow = true;
   scene.add(sand);
 
-  // The gardener: tiny and solid, in dark work clothes and a pale straw hat.
-  const cloth = new THREE.MeshStandardMaterial({ color: '#3a3f48', roughness: 1 });
-  const skin = new THREE.MeshStandardMaterial({ color: '#c9b08e', roughness: 1 });
-  const straw = new THREE.MeshStandardMaterial({ color: '#cdbf98', roughness: 1 });
-  const handle = new THREE.MeshStandardMaterial({ color: '#5e5244', roughness: 1 });
+  // The gardeners: three tiny figures in dark work clothes and pale straw
+  // hats. They are half see-through and cast no shadow, so they are found
+  // rather than noticed.
+  const ghost = (color) => new THREE.MeshStandardMaterial({ color, roughness: 1, transparent: true, opacity: 0.5 });
+  const cloth = ghost('#3a3f48');
+  const skin = ghost('#c9b08e');
+  const straw = ghost('#cdbf98');
+  const handle = ghost('#5e5244');
   const solid = (geometry, material, parent, x = 0, y = 0, z = 0) => {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(x, y, z);
-    mesh.castShadow = true;
     parent.add(mesh);
     return mesh;
   };
   const up = new THREE.Vector3(0, 1, 0);
-  const figure = new THREE.Group();
-  figure.scale.setScalar(wide ? 1.7 : 1.3);
-  const torso = new THREE.Group();
-  torso.position.y = 0.2;
-  solid(new THREE.CapsuleGeometry(0.05, 0.12, 3, 8), cloth, torso, 0, 0.11);
-  solid(new THREE.SphereGeometry(0.042, 10, 8), skin, torso, 0, 0.255);
-  solid(new THREE.ConeGeometry(0.13, 0.055, 12), straw, torso, 0, 0.3);
-  const arm = solid(new THREE.CapsuleGeometry(0.016, 0.1, 2, 5).translate(0, -0.06, 0), cloth, torso, 0.03, 0.18, 0.04);
-  arm.rotation.z = 1.0;
-  const rakeTool = solid(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 5).translate(0, -0.25, 0), handle, torso, 0.12, 0.26, 0.04);
-  rakeTool.rotation.z = 0.3;
-  solid(new THREE.BoxGeometry(0.02, 0.012, 0.13), handle, rakeTool, 0, -0.5, 0);
-  const leg = () => solid(new THREE.CapsuleGeometry(0.022, 0.14, 2, 5).translate(0, -0.09, 0), cloth, figure, 0, 0.2, 0);
-  const legA = leg();
-  const legB = leg();
-  legA.position.z = 0.025;
-  legB.position.z = -0.025;
-  figure.add(torso);
-  scene.add(figure);
+  const makeFigure = () => {
+    const figure = new THREE.Group();
+    figure.scale.setScalar(wide ? 1.5 : 1.2);
+    const torso = new THREE.Group();
+    torso.position.y = 0.2;
+    solid(new THREE.CapsuleGeometry(0.05, 0.12, 3, 8), cloth, torso, 0, 0.11);
+    solid(new THREE.SphereGeometry(0.042, 10, 8), skin, torso, 0, 0.255);
+    solid(new THREE.ConeGeometry(0.13, 0.055, 12), straw, torso, 0, 0.3);
+    const arm = solid(new THREE.CapsuleGeometry(0.016, 0.1, 2, 5).translate(0, -0.06, 0), cloth, torso, 0.03, 0.18, 0.04);
+    arm.rotation.z = 1.0;
+    const rakeTool = solid(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 5).translate(0, -0.25, 0), handle, torso, 0.12, 0.26, 0.04);
+    rakeTool.rotation.z = 0.3;
+    solid(new THREE.BoxGeometry(0.02, 0.012, 0.13), handle, rakeTool, 0, -0.5, 0);
+    const leg = () => solid(new THREE.CapsuleGeometry(0.022, 0.14, 2, 5).translate(0, -0.09, 0), cloth, figure, 0, 0.2, 0);
+    const legA = leg();
+    const legB = leg();
+    legA.position.z = 0.025;
+    legB.position.z = -0.025;
+    figure.add(torso);
+    scene.add(figure);
+    return { figure, torso, rakeTool, legA, legB };
+  };
 
-  // Trees the gardener has planted on this page, in earlier visits and now.
+  // Trees the gardeners have planted on this page, in earlier visits and now.
   const key = `dry-garden:${location.pathname}:${wide ? 'wide' : 'tall'}`;
   let trees = [];
   try {
@@ -285,7 +297,7 @@ async function garden() {
   };
   const full = () => trees.length >= mostTrees;
   const spot = (from, planting) => {
-    const stroll = full() ? halfW * 0.35 : halfW * 0.8; // once the planting is done he barely moves
+    const stroll = halfW * 0.3; // short walks only
     for (let i = 0; i < 120; i++) {
       const x = (Math.random() * 2 - 1) * halfW * 0.9;
       const z = (Math.random() * 2 - 1) * halfD * 0.7;
@@ -299,61 +311,69 @@ async function garden() {
     }
     return null;
   };
-  const me = spot() || { x: halfW * 0.6, z: halfD * 0.3 };
-  let state = 'rest';
-  let until = 3;
-  let target = null;
+  // Each gardener keeps their own place and pace. They start at different
+  // times, so the garden never moves all at once.
+  const workers = [0, 1, 2].map((i) => {
+    const at = spot() || { x: halfW * (0.6 - i * 0.6), z: halfD * (0.3 - i * 0.3) };
+    const body = makeFigure();
+    body.figure.rotation.y = Math.random() * 6;
+    return { ...body, x: at.x, z: at.z, state: 'rest', until: 6 + i * 25 + Math.random() * 20, target: null, stride: 0, willPlant: false };
+  });
   let growing = null;
-  let stride = 0;
-  let willPlant = false;
+  let planter = null; // only one gardener plants at a time
 
   const tend = (now, dt) => {
-    if (state === 'rest' && now > until) {
-      willPlant = !full() && buildTree(null) !== false;
-      target = spot(me, willPlant) || spot(me, false);
-      if (target) state = 'walk';
-      else until = now + 20;
-    } else if (state === 'walk') {
-      const dx = target.x - me.x;
-      const dz = target.z - me.z;
-      const far = Math.hypot(dx, dz);
-      const move = (full() ? 0.15 : 0.22) * dt; // a slow walk
-      if (far <= move) {
-        me.x = target.x;
-        me.z = target.z;
-        state = willPlant ? 'plant' : 'rake';
-        until = now + (willPlant ? 2.6 : 8 + Math.random() * 4);
-      } else {
-        me.x += (dx / far) * move;
-        me.z += (dz / far) * move;
-        figure.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
-        stride += dt * 5;
+    for (const w of workers) {
+      if (w.state === 'rest' && now > w.until) {
+        w.willPlant = !planter && !growing && !full() && buildTree(null) !== false;
+        w.target = spot(w, w.willPlant) || spot(w, false);
+        if (w.willPlant) planter = w;
+        if (w.target) w.state = 'walk';
+        else w.until = now + 30;
+      } else if (w.state === 'walk') {
+        const dx = w.target.x - w.x;
+        const dz = w.target.z - w.z;
+        const far = Math.hypot(dx, dz);
+        const move = 0.09 * dt; // a very slow walk
+        if (far <= move) {
+          w.x = w.target.x;
+          w.z = w.target.z;
+          w.state = w.willPlant ? 'plant' : 'rake';
+          w.until = now + (w.willPlant ? 5 : 14 + Math.random() * 10);
+        } else {
+          w.x += (dx / far) * move;
+          w.z += (dz / far) * move;
+          w.figure.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+          w.stride += dt * 2.2;
+        }
+      } else if (w.state === 'plant' && now > w.until) {
+        const ahead = new THREE.Vector3(0.7, 0, 0).applyAxisAngle(up, w.figure.rotation.y);
+        const tree = { x: +(w.x + ahead.x).toFixed(2), z: +(w.z + ahead.z).toFixed(2), s: +(1.5 + Math.random() * 0.8).toFixed(2) };
+        trees.push(tree);
+        try {
+          localStorage.setItem(key, JSON.stringify(trees));
+        } catch {}
+        growing = { tree: buildTree(tree, false), from: now };
+        planter = null;
+        w.state = 'rest';
+        w.until = now + 60 + Math.random() * 60;
+      } else if (w.state === 'rake' && now > w.until) {
+        w.state = 'rest';
+        w.until = now + 60 + Math.random() * 90; // mostly they stand still
       }
-    } else if (state === 'plant' && now > until) {
-      const ahead = new THREE.Vector3(0.7, 0, 0).applyAxisAngle(up, figure.rotation.y);
-      const tree = { x: +(me.x + ahead.x).toFixed(2), z: +(me.z + ahead.z).toFixed(2), s: +(1.7 + Math.random() * 0.9).toFixed(2) };
-      trees.push(tree);
-      try {
-        localStorage.setItem(key, JSON.stringify(trees));
-      } catch {}
-      growing = { tree: buildTree(tree, false), from: now };
-      state = 'rest';
-      until = now + 12 + Math.random() * 10;
-    } else if (state === 'rake' && now > until) {
-      state = 'rest';
-      until = now + (full() ? 40 + Math.random() * 50 : 12 + Math.random() * 10); // mostly he stands still
+      const swing = w.state === 'walk' ? Math.sin(w.stride) * 0.35 : 0.06;
+      w.legA.rotation.z = swing;
+      w.legB.rotation.z = -swing;
+      w.torso.rotation.z = w.state === 'plant' ? -0.45 : w.state === 'rake' ? -0.22 : 0;
+      w.rakeTool.rotation.z = 0.3 + (w.state === 'rake' ? Math.sin(now * 1.1) * 0.14 : 0);
+      w.figure.position.set(w.x, 0, w.z);
     }
     if (growing) {
-      const k = Math.min(1, (now - growing.from) / 20); // slow enough to notice only on a second look
-      growing.tree.scale.setScalar(Math.max(0.02, 1 - (1 - k) ** 3));
+      // A tree takes four minutes to come up, too slow to see happening.
+      const k = Math.min(1, (now - growing.from) / 240);
+      growing.tree.scale.setScalar(Math.max(0.02, k * k * (3 - 2 * k)));
       if (k === 1) growing = null;
     }
-    const swing = state === 'walk' ? Math.sin(stride) * 0.5 : 0.06;
-    legA.rotation.z = swing;
-    legB.rotation.z = -swing;
-    torso.rotation.z = state === 'plant' ? -0.55 : state === 'rake' ? -0.28 : 0;
-    rakeTool.rotation.z = 0.3 + (state === 'rake' ? Math.sin(now * 2.5) * 0.25 : 0);
-    figure.position.set(me.x, 0, me.z);
   };
 
   const draw = () => renderer.render(scene, camera);
@@ -418,7 +438,7 @@ async function garden() {
   addEventListener('resize', frame);
   media.addEventListener('change', theme);
   new MutationObserver(theme).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
-  figure.position.set(me.x, 0, me.z);
+  for (const w of workers) w.figure.position.set(w.x, 0, w.z);
   frame();
   theme();
   requestAnimationFrame(() => canvas.classList.add('garden-ready')); // the sand fades in straight away
