@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { marked } from 'marked';
-import { enso, garden, ripples, seal } from './src/art.mjs';
+import { enso, favicon, garden, ripples, seal } from './src/art.mjs';
 
 const root = path.dirname(new URL(import.meta.url).pathname);
 const out = path.join(root, 'dist');
@@ -17,8 +17,10 @@ const drafts = serve || process.argv.includes('--drafts');
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 
-const longDate = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
-const shortDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+// Code blocks scroll sideways, so they must take keyboard focus.
+const markdown = (text) => marked.parse(text).replaceAll('<pre>', '<pre tabindex="0">');
 
 // Front matter is optional: `key: value` lines between two `---` lines.
 function frontMatter(raw) {
@@ -79,13 +81,13 @@ function loadPosts() {
       description: meta.description || (plain.length > 160 ? `${plain.slice(0, 157).trimEnd()}…` : plain),
       draft: meta.draft === 'true',
       minutes: Math.max(1, Math.round(text.split(/\s+/).length / 220)),
-      html: marked.parse(text),
+      html: markdown(text),
     });
   }
   return posts.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
 }
 
-function page(site, { title, description, url, body, current }) {
+function page(site, { title, description, url, body, current, currentType = 'page' }) {
   const fullTitle = title ? `${title} · ${site.name}` : `${site.name} · ${site.role}`;
   const nav = [
     ['About', '/#about'],
@@ -93,7 +95,7 @@ function page(site, { title, description, url, body, current }) {
     ['Writing', '/blog/'],
     ['Contact', '/#contact'],
   ]
-    .map(([label, href]) => `<a href="${href}"${label === current ? ' aria-current="page"' : ''}>${label}</a>`)
+    .map(([label, href]) => `<a href="${href}"${label === current ? ` aria-current="${currentType}"` : ''}>${label}</a>`)
     .join('');
   return `<!doctype html>
 <html lang="en">
@@ -144,7 +146,7 @@ ${ripples(p.slug)}
 <span class="post-title">${esc(p.title)}${p.draft ? ' <span class="tag">Draft</span>' : ''}</span>
 <span class="post-desc">${esc(p.description)}</span>
 </span>
-<time datetime="${p.date}">${shortDate.format(p.when)}</time>
+<time datetime="${p.date}">${dateFormat.format(p.when)}</time>
 </a>
 </li>`,
     )
@@ -199,10 +201,11 @@ ${posts.length > 5 ? '<p class="more"><a href="/blog/">All writing</a></p>' : ''
 
 function blogIndex(posts) {
   return `<section class="page-head">
+<p class="label">${posts.length} ${posts.length === 1 ? 'post' : 'posts'}</p>
 <h1>Writing</h1>
 <p class="lede">Notes on infrastructure, tools, and whatever else holds my attention.</p>
 </section>
-${garden('writing', { height: 96 })}
+${garden('writing')}
 ${postList(posts)}`;
 }
 
@@ -211,10 +214,10 @@ function postPage(post, newer, older) {
     p ? `<a href="/blog/${p.slug}/"><span class="label">${label}</span>${esc(p.title)}</a>` : '<span></span>';
   return `<article>
 <header class="page-head">
-<p class="label"><time datetime="${post.date}">${longDate.format(post.when)}</time> · ${post.minutes} min read${post.draft ? ' · <span class="tag">Draft</span>' : ''}</p>
+<p class="label"><time datetime="${post.date}">${dateFormat.format(post.when)}</time> · ${post.minutes} min read${post.draft ? ' · <span class="tag">Draft</span>' : ''}</p>
 <h1>${esc(post.title)}</h1>
 </header>
-${garden(post.slug, { height: 96 })}
+${garden(post.slug)}
 <div class="prose">${post.html}</div>
 </article>
 <nav class="pager" aria-label="More writing">
@@ -259,14 +262,14 @@ function write(file, content) {
 
 function build() {
   const site = JSON.parse(fs.readFileSync(path.join(root, 'content/site.json'), 'utf8'));
-  const about = marked.parse(fs.readFileSync(path.join(root, 'content/about.md'), 'utf8'));
+  const about = markdown(fs.readFileSync(path.join(root, 'content/about.md'), 'utf8'));
   const posts = loadPosts();
 
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   if (fs.existsSync(path.join(root, 'public'))) fs.cpSync(path.join(root, 'public'), out, { recursive: true });
   fs.copyFileSync(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
-  write('favicon.svg', seal);
+  write('favicon.svg', favicon);
   write('CNAME', `${new URL(site.url).hostname}\n`);
 
   write('index.html', page(site, { description: site.tagline, url: '/', body: home(site, posts, about) }));
@@ -289,6 +292,7 @@ function build() {
         url: `/blog/${post.slug}/`,
         body: postPage(post, posts[i - 1], posts[i + 1]),
         current: 'Writing',
+        currentType: 'true',
       }),
     ),
   );
@@ -298,7 +302,7 @@ function build() {
       title: 'Not found',
       description: 'This page does not exist.',
       url: '/404.html',
-      body: `<section class="page-head lost">${enso('lost', 'lost')}<h1>Nothing here</h1><p class="lede">This page does not exist. <a href="/">Go home</a>.</p></section>`,
+      body: `<section class="hero lost"><div><p class="label">404</p><h1>Nothing here</h1><p class="lede">This page does not exist. <a href="/">Go home</a>.</p></div>${enso('lost', 'lost')}</section>`,
     }),
   );
   write('feed.xml', feed(site, posts));

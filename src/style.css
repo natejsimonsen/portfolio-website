@@ -12,7 +12,16 @@
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --measure: 40rem;
+  --measure: 38rem;
+  --col: 14rem; /* label column in the project and contact lists */
+  --rhythm: 4.5rem; /* space between sections */
+  --gap: 2rem; /* space under a page heading */
+  --radius: 3px;
+  --tap: 2.75rem; /* smallest hit area on touch screens */
+  --label-size: 0.75rem;
+  --label-weight: 500;
+  --label-spacing: 0.12em;
+  --shade: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,12 +55,12 @@ body {
   padding: 0 1.5rem;
   background: var(--bg);
   color: var(--ink);
-  font: 1.125rem/1.7 var(--serif);
+  font: 1.1875rem/1.7 var(--serif);
   text-rendering: optimizeLegibility;
 }
 
 a {
-  color: inherit;
+  color: var(--ink);
   text-decoration-color: var(--accent);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
@@ -64,7 +73,33 @@ a:hover {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius);
+}
+
+/* Small links get a 44px tall hit area without moving or restyling the text,
+   so focus rings still hug the text. */
+.top nav a,
+.bottom a,
+.contact a,
+.pager a,
+.more a,
+.lost a {
+  position: relative;
+}
+
+.top nav a::after,
+.bottom a::after,
+.contact a::after,
+.pager a::after,
+.more a::after,
+.lost a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, var(--tap));
+  transform: translateY(-50%);
 }
 
 h1,
@@ -81,21 +116,24 @@ h1 {
   letter-spacing: -0.02em;
 }
 
+/* The one label style: small sans capitals. */
 .label,
 main > section > h2,
 time,
 .top nav,
-.bottom {
+.bottom,
+.prose th,
+.tag {
   font-family: var(--sans);
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-spacing);
   text-transform: uppercase;
   color: var(--muted);
 }
 
 main > section > h2 {
   margin: 0 0 1.4rem;
-  font-weight: 600;
 }
 
 main > section > h2::before {
@@ -158,22 +196,33 @@ main > section > h2::before {
 .top nav {
   display: flex;
   gap: 1.4rem;
+  padding: 0.5rem 0;
 }
 
-.top nav a {
-  padding: 0.5rem 0;
+/* Chrome links (header nav, footer): muted, no underline, accent on hover. */
+.top nav a,
+.bottom a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.top nav a:hover,
+.bottom a:hover {
+  color: var(--accent);
 }
 
 .top nav a[aria-current] {
   color: var(--ink);
-  box-shadow: 0 1px 0 var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.6em;
 }
 
 .bottom {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-top: 5rem;
+  margin-top: var(--rhythm);
   padding: 2rem 0 3rem;
   border-top: 1px solid var(--line);
 }
@@ -191,9 +240,21 @@ main > section > h2::before {
   height: 1.4rem;
 }
 
+.seal-bg {
+  fill: var(--accent);
+}
+
+.seal-mark {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Sections */
 main > section {
-  margin: 4.5rem 0;
+  margin: var(--rhythm) 0;
 }
 
 .hero {
@@ -201,24 +262,16 @@ main > section {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 2rem;
-  margin-top: 3rem !important;
+  margin-top: 3rem;
 }
 
 .page-head {
-  margin: 3rem 0 2rem !important;
+  margin: 3rem 0 var(--gap);
 }
 
-.lost {
-  text-align: center;
-}
-
-.lost .lede {
-  margin: 0 auto;
-}
-
-/* Drawings */
+/* Drawings. Same size on every page at each width. */
 .enso {
-  width: clamp(8rem, 26vw, 12rem);
+  width: clamp(6rem, 20vw, 9rem);
   height: auto;
 }
 
@@ -226,11 +279,17 @@ main > section {
   fill: var(--ink);
 }
 
+/* The garden adds no margin of its own between sections; under a page
+   heading it leaves the same gap below as the heading leaves above. */
 .garden {
   display: block;
   width: 100%;
   height: auto;
-  margin: 1rem 0;
+  margin: 0 0 var(--gap);
+}
+
+.garden.garden-narrow {
+  display: none;
 }
 
 .garden .sand path {
@@ -315,7 +374,7 @@ main > section {
 }
 
 .projects a {
-  grid-template-columns: 14rem 1fr;
+  grid-template-columns: var(--col) 1fr;
   align-items: baseline;
 }
 
@@ -337,9 +396,14 @@ main > section {
   line-height: 1.5;
 }
 
+/* Icon and date line up with the title's first line at every width. */
 .posts a {
   grid-template-columns: auto 1fr auto;
-  align-items: center;
+  align-items: start;
+}
+
+.posts .ripples {
+  margin-top: calc((1.2rem * 1.3 - 2.75rem) / 2);
 }
 
 .post-text {
@@ -359,6 +423,7 @@ main > section {
 
 .posts time {
   white-space: nowrap;
+  line-height: calc(1.2rem * 1.3);
 }
 
 .more {
@@ -368,12 +433,10 @@ main > section {
 .tag {
   padding: 0.1rem 0.4rem;
   border: 1px solid var(--accent);
-  border-radius: 3px;
-  font: 600 0.65rem var(--sans);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  border-radius: var(--radius);
+  line-height: normal;
   color: var(--accent);
-  vertical-align: 0.2em;
+  vertical-align: 0.15em;
 }
 
 .contact {
@@ -382,9 +445,13 @@ main > section {
 
 .contact li {
   display: grid;
-  grid-template-columns: 7rem 1fr;
+  grid-template-columns: var(--col) 1fr;
   align-items: baseline;
-  padding: 0.35rem 0;
+  padding: 0.5rem 0;
+}
+
+.contact a {
+  justify-self: start;
 }
 
 /* Long-form text */
@@ -433,22 +500,44 @@ main > section {
 
 .prose code {
   padding: 0.1em 0.35em;
-  border-radius: 3px;
+  border-radius: var(--radius);
   background: var(--code-bg);
   font: 0.85em var(--mono);
 }
 
+/* The padding sits on the code so it holds on both sides when scrolled.
+   A soft shade at an edge, and a thin scrollbar, show there is more. */
 .prose pre {
   overflow-x: auto;
-  padding: 1rem 1.2rem;
-  border-radius: 4px;
-  background: var(--code-bg);
+  padding: 0;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(to right, var(--code-bg) 40%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--code-bg) 40%, transparent) right / 2rem 100% no-repeat local,
+    linear-gradient(to right, var(--shade), transparent) left / 0.75rem 100% no-repeat scroll,
+    linear-gradient(to left, var(--shade), transparent) right / 0.75rem 100% no-repeat scroll,
+    var(--code-bg);
   line-height: 1.55;
   tab-size: 4;
+  scrollbar-width: thin;
+  scrollbar-color: var(--stone) transparent;
+}
+
+.prose pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+.prose pre::-webkit-scrollbar-thumb {
+  border-radius: var(--radius);
+  background: var(--stone);
 }
 
 .prose pre code {
-  padding: 0;
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  padding: 1rem 1.2rem;
+  border-radius: 0;
   background: none;
   font-size: 0.85rem;
 }
@@ -457,12 +546,12 @@ main > section {
   display: block;
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 
 .prose hr {
   width: 4rem;
-  margin: 2.6rem auto;
+  margin: 2.6rem 0;
   border: 0;
   border-top: 1px solid var(--stone);
 }
@@ -481,33 +570,38 @@ main > section {
   text-align: left;
 }
 
-.prose th {
-  font: 600 0.75rem var(--sans);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 
+/* Pager titles are content links: ink with the accent underline.
+   The label above them is an inline-block, so it is not underlined. */
 .pager {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
-  margin-top: 4rem;
+  margin-top: var(--rhythm);
   padding-top: 1.5rem;
   border-top: 1px solid var(--line);
 }
 
 .pager a {
-  display: grid;
-  gap: 0.3rem;
-  text-decoration: none;
+  justify-self: start;
 }
 
 .pager a:last-child {
+  justify-self: end;
   text-align: right;
 }
 
+.pager .label {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 0.3rem;
+}
+
 @media (max-width: 34rem) {
+  :root {
+    --rhythm: 3.5rem;
+  }
+
   body {
     font-size: 1.0625rem;
   }
@@ -527,11 +621,18 @@ main > section {
 
   .hero .enso {
     order: -1;
-    width: 7rem;
   }
 
-  main > section {
-    margin: 3.5rem 0;
+  .enso {
+    width: 5.25rem;
+  }
+
+  .garden.garden-wide {
+    display: none;
+  }
+
+  .garden.garden-narrow {
+    display: block;
   }
 
   .projects a {
@@ -544,6 +645,8 @@ main > section {
 
   .posts time {
     grid-column: 2;
+    margin-top: 0.6rem;
+    line-height: inherit;
   }
 
   .contact li {

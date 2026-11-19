@@ -61,18 +61,38 @@ export function enso(seed, id = 'enso') {
     })
     .join('');
 
-  return `<svg class="enso" viewBox="0 0 220 220" role="img" aria-label="A brush-drawn circle">
-<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="220">
+  // Fit the box to the ink so the drawing lines up with the column edge.
+  const xs = [...outer, ...inner].map(([x]) => x);
+  const ys = [...outer, ...inner].map(([, y]) => y);
+  const x0 = Math.floor(Math.min(...xs)) - 1;
+  const y0 = Math.floor(Math.min(...ys)) - 1;
+  const w = Math.ceil(Math.max(...xs)) + 1 - x0;
+  const h = Math.ceil(Math.max(...ys)) + 1 - y0;
+
+  return `<svg class="enso" viewBox="${x0} ${y0} ${w} ${h}" role="img" aria-label="A brush-drawn circle">
+<mask id="${id}" maskUnits="userSpaceOnUse" x="${x0}" y="${y0}" width="${w}" height="${h}">
 <path class="draw draw-slow" pathLength="1" d="${line(centre)}" stroke="#fff" stroke-width="36" fill="none"/>${streaks}
 </mask>
 <path class="ink" mask="url(#${id})" d="${brush}"/>
 </svg>`;
 }
 
-// Raked sand: parallel lines that bend around a few stones.
-export function garden(seed, { width = 720, height = 132, gap = 9 } = {}) {
+// Raked sand: parallel lines that bend around a few stones. It is drawn
+// twice from one seed, wide and narrow, so phones get the same line gap and
+// stone size instead of a scaled-down picture. CSS shows one or the other.
+const height = 96;
+const gap = 9;
+
+export function garden(seed) {
+  const wide = sand(seed, 720, 0);
+  const narrow = sand(seed, 360, 1);
+  return `<svg class="garden garden-wide" viewBox="0 0 720 ${height}" role="img" aria-label="Raked sand flowing around stones">${wide}</svg>
+<svg class="garden garden-narrow" viewBox="0 0 360 ${height}" aria-hidden="true">${narrow}</svg>`;
+}
+
+function sand(seed, width, fewer) {
   const rand = rng(seed);
-  const count = 2 + Math.floor(rand() * 2);
+  const count = 2 + Math.floor(rand() * 2) - fewer;
   const rows = Math.floor(height / gap);
   const stones = [];
   for (let i = 0; i < count; i++) {
@@ -121,9 +141,7 @@ export function garden(seed, { width = 720, height = 132, gap = 9 } = {}) {
     })
     .join('');
 
-  return `<svg class="garden" viewBox="0 0 ${width} ${height}" role="img" aria-label="Raked sand flowing around stones">
-<g class="sand">${lines}</g><g class="stones">${blobs}</g>
-</svg>`;
+  return `<g class="sand">${lines}</g><g class="stones">${blobs}</g>`;
 }
 
 // Ripples: a small mark for each post in a list.
@@ -146,5 +164,12 @@ export function ripples(seed) {
   return `<svg class="ripples" viewBox="0 0 44 44" aria-hidden="true">${arcs}<circle cx="${n(cx)}" cy="${n(cy)}" r="1.7"/></svg>`;
 }
 
-// A small red seal, used as the favicon and the footer mark.
-export const seal = `<svg xmlns="http://www.w3.org/2000/svg" class="seal" viewBox="0 0 32 32" aria-hidden="true"><path fill="#b5452f" d="M5.2 3.6 26.4 3c1.6 0 2.7 1.1 2.7 2.6l.3 20.6c0 1.6-1 2.8-2.6 2.8l-21 .4c-1.6 0-2.8-1-2.8-2.6L2.6 6.3c0-1.5 1-2.7 2.6-2.7Z"/><path fill="none" stroke="#f6f3ec" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M10.5 22.5v-13l11 13v-13"/></svg>`;
+// A small red seal. The footer copy is coloured by CSS so it follows the
+// accent; the favicon is a standalone file, so it carries fixed colours.
+const sealBg = 'M5.2 3.6 26.4 3c1.6 0 2.7 1.1 2.7 2.6l.3 20.6c0 1.6-1 2.8-2.6 2.8l-21 .4c-1.6 0-2.8-1-2.8-2.6L2.6 6.3c0-1.5 1-2.7 2.6-2.7Z';
+const sealMark = 'M10.5 22.5v-13l11 13v-13';
+const markShape = 'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"';
+
+export const seal = `<svg class="seal" viewBox="0 0 32 32" aria-hidden="true"><path class="seal-bg" d="${sealBg}"/><path class="seal-mark" ${markShape} d="${sealMark}"/></svg>`;
+
+export const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#b5452f" d="${sealBg}"/><path fill="none" stroke="#f6f3ec" ${markShape} d="${sealMark}"/></svg>`;
