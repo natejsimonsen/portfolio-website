@@ -99,20 +99,22 @@ function garden() {
   };
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(26, 1, 1, 80);
-  camera.position.set(0, 14, 26.5);
-  camera.lookAt(0, -2.5, 0);
+  const camera = new THREE.PerspectiveCamera(28, 1, 1, 90);
+  camera.position.set(0, 13, 25);
+  camera.lookAt(0, -3.3, 0);
 
   // Light: a low sun or moon with shadows, sky fill, a back light that
   // outlines the rock, and soft reflected light from all around.
   const sun = new THREE.DirectionalLight();
   sun.position.set(-9, 7, 4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -6.4, right: 6.4, top: 6.4, bottom: -6.4, near: 1, far: 40 });
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.04;
-  sun.shadow.radius = 5;
+  const sharp = innerWidth < 960 ? 2048 : 4096;
+  sun.shadow.mapSize.set(sharp, sharp);
+  Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 2, far: 30 });
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.025;
+  sun.shadow.radius = 2.5;
   const sky = new THREE.HemisphereLight();
   const back = new THREE.DirectionalLight();
   back.position.set(6, -2, -9);
@@ -237,7 +239,7 @@ function garden() {
       }
       at.setXYZ(i, v.x * squash[0], v.y * squash[1], v.z * squash[2]);
       const green = Math.min(1, Math.max(0, (n.y - 0.25 + 0.9 * fbm(n.x * 2.4 + offset, n.y * 2.4, n.z * 2.4, 3)) * 2.4)) * moss;
-      const c = stoneGrey.clone().lerp(mossGreen, green);
+      const c = stoneGrey.clone().lerp(mossGreen, green).multiplyScalar(0.72 + 0.4 * (n.y * 0.5 + 0.5)); // weathered pale on top, dark at the base
       shades.push(c.r, c.g, c.b);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
@@ -288,6 +290,26 @@ function garden() {
       }
     }
   };
+  // At the edge the rake turns: the straight rows stop short of the rim,
+  // and two rows follow the rim round instead.
+  const border = (ctx, colour, flat, width) => {
+    const trace = (scale) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) {
+        const a = (i / 200) * Math.PI * 2;
+        ctx.lineTo(px(Math.cos(a) * rimAt(a) * scale), px(Math.sin(a) * rimAt(a) * scale));
+      }
+      ctx.closePath();
+      ctx.stroke();
+    };
+    ctx.strokeStyle = flat;
+    ctx.lineWidth = len(0.62);
+    trace(0.985);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = len(width);
+    trace(0.925);
+    trace(0.875);
+  };
   const speckle = (ctx, count, shades) => {
     for (let i = 0; i < count; i++) {
       ctx.fillStyle = shades[i % shades.length];
@@ -299,10 +321,11 @@ function garden() {
   const colourSheet = sheet();
   {
     const ctx = colourSheet.getContext('2d');
-    ctx.fillStyle = '#d9c9a6';
+    ctx.fillStyle = '#d7cbb1';
     ctx.fillRect(0, 0, SIZE, SIZE);
     ctx.filter = `blur(${SIZE / 700}px)`;
-    rake(ctx, 'rgba(110, 88, 55, 0.16)', 'rgba(217, 201, 166, 1)', 0.1);
+    rake(ctx, 'rgba(110, 88, 55, 0.16)', 'rgba(215, 203, 177, 1)', 0.1);
+    border(ctx, 'rgba(110, 88, 55, 0.16)', 'rgba(215, 203, 177, 1)', 0.1);
     ctx.filter = 'none';
     // sand is never one even tone: broad soft patches, a few percent lighter or darker
     for (let i = 0; i < 46; i++) {
@@ -336,6 +359,7 @@ function garden() {
     h.fillRect(0, 0, SIZE, SIZE);
     h.filter = `blur(${SIZE / 330}px)`; // a wide blur turns each line into a rounded trough
     rake(h, 'rgba(20, 20, 20, 1)', 'rgba(160, 160, 160, 1)', 0.12);
+    border(h, 'rgba(20, 20, 20, 1)', 'rgba(160, 160, 160, 1)', 0.12);
     // sand banked up around each stone
     for (const s of stones) {
       h.strokeStyle = 'rgba(245, 245, 245, 0.9)';
@@ -404,7 +428,7 @@ function garden() {
         const [r, y, shade, v] = place(a);
         spots.push(Math.cos(a) * r, y, Math.sin(a) * r);
         shades.push(shade, shade, shade);
-        uvs.push((j / T) * 7, v);
+        uvs.push((j / T) * 13, v);
       }
     };
     ring((a) => [rimAt(a) * 0.92, -0.06, 0.9, 0]); // under the sand
@@ -413,16 +437,16 @@ function garden() {
     ring((a) => [rimAt(a) * (1.04 + 0.03 * edge(a, 2.1)), -0.05 + 0.08 * edge(a, 5), 0.95, 0.2]);
     for (let k = 1; k <= steps; k++) {
       const v = k / steps;
-      const y0 = -0.03 - 5.5 * v;
+      const y0 = -0.03 - 7.4 * v;
       ring((a) => {
         const x = Math.cos(a);
         const z = Math.sin(a);
-        const crag = Math.min(1, v * 5);
+        const crag = Math.min(1, v * 3.2) ** 2; // the rock breaks up gradually below the rim, with no ledge
         const ridges = 0.44 * fbm(x * 1.1, y0 * 0.42, z * 1.1, 5, true) + 0.12 * fbm(x * 3.3, y0 * 1.2, z * 3.3, 3);
-        const r = rimAt(a) * 1.04 * (1 - v) ** 1.08 * (1 + crag * ridges) + crag * 0.1 * (1 - v);
+        const r = rimAt(a) * 1.04 * (1 - v) ** 0.92 * (1 + crag * ridges);
         const y = y0 + crag * 0.22 * fbm(x * 1.6, y0 * 0.5, z * 1.6, 3);
         const hollow = 0.72 + 0.9 * Math.max(-0.3, ridges); // darker in the hollows between ridges
-        return [Math.max(0.02, r), y, hollow * (1 - 0.42 * v) * (v < 0.14 ? 0.8 : 1), 0.2 + v * 3.2];
+        return [Math.max(0.02, r), y, hollow * (1 - 0.5 * v) * (v < 0.1 ? 0.84 : 1), 0.2 + v * 3.4];
       });
     }
     for (let i = 0; i < count - 1; i++) {
@@ -443,19 +467,19 @@ function garden() {
     island.add(body);
   }
 
-  const stoneLook = new THREE.MeshStandardMaterial({ map: rockMap, normalMap: rockNormal, normalScale: new THREE.Vector2(1.2, 1.2), vertexColors: true, roughness: 0.93, envMapIntensity: 0.5 });
+  const stoneLook = new THREE.MeshStandardMaterial({ map: rockMap, normalMap: rockNormal, normalScale: new THREE.Vector2(1.2, 1.2), vertexColors: true, roughness: 0.98, envMapIntensity: 0.2 });
   for (const s of stones) {
     const mesh = new THREE.Mesh(boulder(s.r, s.squash), stoneLook);
-    mesh.position.set(s.x, s.r * s.squash[1] * 0.3, s.z); // bedded into the sand
+    mesh.position.set(s.x, s.r * s.squash[1] * 0.16, s.z); // sunk well into the sand
     mesh.rotation.set(between(-0.15, 0.15), rand() * 6, between(-0.15, 0.15));
     mesh.castShadow = mesh.receiveShadow = true;
     island.add(mesh);
   }
 
   // A short trail of chips hangs below the tip, smaller the further down.
-  [0.22, 0.14, 0.09, 0.055].forEach((size, i) => {
+  [0.26, 0.18, 0.13, 0.09].forEach((size, i) => {
     const mesh = new THREE.Mesh(boulder(size, [1, between(0.7, 1), between(0.7, 1.1)], { cuts: 5, moss: 0, detail: 12 }), stoneLook);
-    mesh.position.set(between(-0.5, 0.5), -5.95 - i * 0.42, between(-0.4, 0.4));
+    mesh.position.set((i % 2 ? 0.42 : -0.38) * (1 - i * 0.15), -8.2 - i * 0.78, between(-0.3, 0.3));
     mesh.rotation.set(rand() * 6, rand() * 6, 0);
     mesh.castShadow = true;
     island.add(mesh);
@@ -470,9 +494,9 @@ function garden() {
     g.fillStyle = night ? '#0d0f14' : '#f6f3ec';
     g.fillRect(0, 0, 512, 512);
     if (night) {
-      const haze = g.createRadialGradient(256, 262, 0, 256, 262, 215);
-      haze.addColorStop(0, 'rgba(96, 124, 205, 0.26)');
-      haze.addColorStop(0.55, 'rgba(70, 95, 175, 0.1)');
+      const haze = g.createRadialGradient(256, 240, 0, 256, 240, 236);
+      haze.addColorStop(0, 'rgba(96, 124, 205, 0.13)');
+      haze.addColorStop(0.5, 'rgba(70, 95, 175, 0.055)');
       haze.addColorStop(1, 'rgba(60, 80, 160, 0)');
       g.fillStyle = haze;
       g.fillRect(0, 0, 512, 512);
@@ -504,15 +528,15 @@ function garden() {
     const h = tree.s;
     const wood = [];
     const leaf = [];
-    const tone = tree.t === 0 ? [0.1, 0.19, 0.11] : [0.2, 0.29, 0.12]; // pine is darker and bluer
+    const tone = tree.t === 0 ? [0.11, 0.18, 0.11] : [0.19, 0.25, 0.12]; // pine is darker and bluer
     const pad = (at, wide, flat) => {
-      const leaves = 34;
+      const leaves = 46;
       for (let i = 0; i < leaves; i++) {
         const a = pick() * 6.28;
         const far = Math.sqrt(pick());
         const lift = (pick() - 0.35) * flat;
-        const g = new THREE.IcosahedronGeometry(wide * (0.2 + pick() * 0.16), 0);
-        g.rotateX(pick() * 3).rotateY(pick() * 3);
+        const g = new THREE.IcosahedronGeometry(wide * (0.17 + pick() * 0.15), 0);
+        g.rotateX(pick() * 3).rotateY(pick() * 3).scale(1, 0.5, 1); // each tuft is flattened
         g.translate(at.x + Math.cos(a) * far * wide, at.y + lift * wide * (1 - far * 0.6), at.z + Math.sin(a) * far * wide);
         const light = 0.62 + 0.55 * (lift / flat + 0.35) + (pick() - 0.5) * 0.18; // darker underneath, lighter on top
         const shades = [];
@@ -535,7 +559,7 @@ function garden() {
         const reach = (0.34 - i * 0.055) * (i === 4 ? 0.2 : 1);
         const to = v(lean * t * 0.5 + Math.cos(a) * reach * side, t + 0.05, Math.sin(a) * reach);
         if (i < 4) wood.push(stick(from, to, h * 0.022, h * 0.012));
-        pad(to, h * (0.27 - i * 0.035), 0.34);
+        pad(to, h * (0.29 - i * 0.04), 0.2);
       }
     } else if (tree.t === 1) {
       // cloud-pruned tree: a bent trunk that forks, each fork ending in a pad
@@ -544,12 +568,12 @@ function garden() {
       const ends = [v(0.3 + lean, 0.86, 0.05), v(-0.26 + lean, 0.66, 0.12), v(0.44 + lean, 0.52, -0.16), v(-0.02 + lean, 1.04, -0.08)];
       ends.forEach((end, i) => {
         wood.push(stick(fork, end, h * 0.04, h * 0.016));
-        pad(end, h * [0.3, 0.24, 0.2, 0.17][i], 0.42);
+        pad(end, h * [0.32, 0.25, 0.21, 0.17][i], 0.24);
       });
     } else {
       // a low mound of shrub
-      pad(v(0, 0.1, 0), h * 0.32, 0.5);
-      pad(v(0.22, 0.08, 0.1), h * 0.2, 0.5);
+      pad(v(0, 0.08, 0), h * 0.32, 0.36);
+      pad(v(0.22, 0.06, 0.1), h * 0.2, 0.36);
     }
     const g = new THREE.Group();
     if (wood.length) {
@@ -571,7 +595,7 @@ function garden() {
   // The gardener: tiny and solid, in dark work clothes and a pale straw hat.
   const cloth = new THREE.MeshStandardMaterial({ color: '#2f3947', roughness: 1 });
   const skin = new THREE.MeshStandardMaterial({ color: '#c9b08e', roughness: 1 });
-  const straw = new THREE.MeshStandardMaterial({ color: '#f0e0b0', roughness: 1 });
+  const straw = new THREE.MeshStandardMaterial({ color: '#d9c89c', roughness: 1 });
   const handle = new THREE.MeshStandardMaterial({ color: '#6a5540', roughness: 1 });
   const solid = (geometry, material, parent, x = 0, y = 0, z = 0) => {
     const mesh = new THREE.Mesh(geometry, material);
@@ -694,17 +718,18 @@ function garden() {
     const night = isNight();
     scene.background = night ? backdrops.night : backdrops.day;
     sun.color.set(night ? '#c3d0ff' : '#fff0da');
-    sun.intensity = night ? 1.55 : 2.25;
+    sun.intensity = night ? 2.3 : 3.6;
     sky.color.set(night ? '#31406a' : '#fffaf0');
     sky.groundColor.set(night ? '#0e1426' : '#9a8c70');
-    sky.intensity = night ? 0.4 : 0.62;
+    sky.intensity = night ? 0.35 : 0.7;
     back.color.set(night ? '#8fb0ff' : '#ffe2c2');
     back.intensity = night ? 1.5 : 0.35;
     under.color.set(night ? '#5d7ad0' : '#ecd9b8');
     under.intensity = night ? 0.8 : 0.3;
-    scene.environmentIntensity = night ? 0.1 : 0.34;
+    scene.environmentIntensity = night ? 0.05 : 0.1; // only a little, or it washes out the shadows
     sandLook.roughness = night ? 0.72 : 1; // a faint silver sheen on the ridges under the moon
-    sandLook.color.set(night ? '#cfd6ea' : '#ffffff'); // moonlit sand is cooler
+    sandLook.color.set(night ? '#e3e8f8' : '#ffffff'); // moonlit sand is cooler and stays lighter than the rock
+    rockLook.color.set(night ? '#aab0c2' : '#ffffff');
     canvas.classList.toggle('garden-night', night);
     draw();
   };
@@ -717,11 +742,11 @@ function garden() {
     const rem = parseFloat(getComputedStyle(root).fontSize);
     const gutter = (w - 38 * rem) / 2 - 1.5 * rem; // space beside the text column
     const wide = gutter >= 250;
-    const size = Math.round(wide ? Math.min(gutter - 30, h * 0.72, 620) : Math.min(w * 0.72, h * 0.4));
+    const size = Math.round(wide ? Math.min(gutter - 64, h * 0.72, 620) : Math.min(w * 0.72, h * 0.4));
     canvas.classList.toggle('garden-low', !wide);
     canvas.style.width = canvas.style.height = `${size}px`;
-    canvas.style.left = `${Math.round(wide ? w - gutter + (gutter - size) / 2 - 18 : (w - size) / 2)}px`;
-    canvas.style.top = `${Math.round(wide ? h * 0.46 - size / 2 : h - size * 0.98)}px`;
+    canvas.style.left = `${Math.round(wide ? w - gutter + (gutter - size) / 2 : (w - size) / 2)}px`;
+    canvas.style.top = `${Math.round(wide ? h * 0.46 - size / 2 : h - size * 0.88)}px`;
     const ratio = Math.min(devicePixelRatio, 2);
     renderer.setPixelRatio(ratio);
     renderer.setSize(size, size, false);
