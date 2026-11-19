@@ -24,12 +24,24 @@ const between = (rand, lo, hi) => lo + rand() * (hi - lo);
 // drawn twice from one seed: a wide one that keeps stones in the side
 // margins, clear of the text column, and a tall one for phones, where the
 // stones sit half off the edges and only their rings reach under the text.
+// src/gardener.js adds a small figure who plants trees in it.
 const gap = 14;
 const stretch = 1.12; // stones and their rings are a little wider than tall
 
 export function backdrop(seed) {
-  return `<svg class="backdrop backdrop-wide" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${sand(seed, 1600, 1000, [[40, 370], [1230, 1560]], 7)}</svg>
-<svg class="backdrop backdrop-tall" viewBox="0 0 500 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${sand(seed, 500, 1000, [[14, 34], [466, 486]], 5)}</svg>`;
+  // stones in the margins on wide screens; half off the edges on narrow ones
+  return (
+    layer('wide', seed, 1600, [[40, 370], [1230, 1560]], 7, [[40, 330], [1270, 1560]], 12) +
+    layer('tall', seed, 500, [[14, 34], [466, 486]], 5, [[24, 46], [454, 476]], 6)
+  );
+}
+
+// `plant` and `trees` tell the gardener script where it may plant, and how much.
+function layer(name, seed, width, zones, count, plant, trees) {
+  const { markup, stones } = sand(seed, width, 1000, zones, count);
+  const data = JSON.stringify(stones.map((s) => [Math.round(s.x), s.y, Math.round(s.outer * stretch)]));
+  return `<svg class="backdrop backdrop-${name}" viewBox="0 0 ${width} 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true" data-stones="${data}" data-plant="${JSON.stringify(plant)}" data-trees="${trees}">${markup}</svg>
+`;
 }
 
 function sand(seed, width, height, zones, count) {
@@ -94,7 +106,7 @@ function sand(seed, width, height, zones, count) {
     // Larger groups get a small companion stone tucked beside the big one.
     if (s.rings >= 4) blobs += `<path d="${loop(s, s.r * 0.42, 0.1, s.r * 1.25, s.r * 0.55)}"/>`;
   }
-  return `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`;
+  return { markup: `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`, stones };
 }
 
 // Ripples: a small mark for each post in a list.

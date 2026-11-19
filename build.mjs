@@ -120,6 +120,7 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/atom+xml" title="${esc(site.name)}" href="/feed.xml">
 <link rel="stylesheet" href="/style.css">
+<script src="/gardener.js" defer></script>
 <script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -295,7 +296,7 @@ function build() {
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   if (fs.existsSync(path.join(root, 'public'))) fs.cpSync(path.join(root, 'public'), out, { recursive: true });
-  fs.copyFileSync(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
+  for (const file of ['style.css', 'gardener.js']) fs.copyFileSync(path.join(root, 'src', file), path.join(out, file));
   write('favicon.svg', favicon);
   write('CNAME', `${new URL(site.url).hostname}\n`);
 
@@ -339,7 +340,7 @@ function build() {
 build();
 
 if (serve) {
-  const types = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
+  const types = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg' };
   for (const dir of ['posts', 'content', 'src', 'public']) {
     if (!fs.existsSync(path.join(root, dir))) continue;
     let timer;
