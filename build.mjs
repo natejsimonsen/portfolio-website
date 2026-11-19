@@ -6,8 +6,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { buildSync } from 'esbuild';
 import { marked } from 'marked';
-import { backdrop, favicon, grain, ripples, seal } from './src/art.mjs';
+import { favicon, ripples, seal } from './src/art.mjs';
 
 const root = path.dirname(new URL(import.meta.url).pathname);
 const out = path.join(root, 'dist');
@@ -111,7 +112,7 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <meta name="description" content="${esc(description)}">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#151614" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0d0f14" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="${esc(title || site.name)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${site.url}${url}">
@@ -120,11 +121,10 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/atom+xml" title="${esc(site.name)}" href="/feed.xml">
 <link rel="stylesheet" href="/style.css">
-<script src="/gardener.js" defer></script>
+<script type="module" src="/garden3d.js"></script>
 <script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
-${backdrop(url)}
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
 <a class="name" href="/">${esc(site.name)}</a>
@@ -296,9 +296,10 @@ function build() {
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   if (fs.existsSync(path.join(root, 'public'))) fs.cpSync(path.join(root, 'public'), out, { recursive: true });
-  for (const file of ['style.css', 'gardener.js']) fs.copyFileSync(path.join(root, 'src', file), path.join(out, file));
+  fs.copyFileSync(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
+  // The 3D background and its library (three.js) are bundled into one file.
+  buildSync({ entryPoints: [path.join(root, 'src/garden3d.js')], bundle: true, minify: true, format: 'esm', target: 'es2020', outfile: path.join(out, 'garden3d.js'), logLevel: 'warning' });
   write('favicon.svg', favicon);
-  write('sand.svg', grain);
   write('CNAME', `${new URL(site.url).hostname}\n`);
 
   write('index.html', page(site, { description: site.tagline, url: '/', body: home(site, posts, about) }));

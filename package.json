@@ -7,6 +7,10 @@
     "dev": "node build.mjs --serve"
   },
   "dependencies": {
-    "marked": "^16.0.0"
+    "marked": "^16.0.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

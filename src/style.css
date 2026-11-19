@@ -2,26 +2,14 @@
    override it by setting data-theme on <html>. */
 :root {
   color-scheme: light dark;
-  --bg: light-dark(#f6f3ec, #151614);
+  --bg: light-dark(#f6f3ec, #0d0f14);
   --ink: light-dark(#1f1d1a, #e6e2d8);
   --muted: light-dark(#68635b, #a09b90);
-  --line: light-dark(#dcd6c9, #2e2f2b);
+  --line: light-dark(#dcd6c9, #272b33);
   --sand: light-dark(#cdc5b4, #3a3b36);
   --stone: light-dark(#8d877b, #6f6c64);
-  --moss: light-dark(#8f9a7a, #4d5744); /* trees the gardener plants */
-  --moss-hi: light-dark(#b3bd9d, #6a7660);
-  /* Light and shadow for the background garden. The light is top left. */
-  --groove-ridge: light-dark(rgb(150 135 105 / 0.16), rgb(255 255 255 / 0.035));
-  --groove-shade: light-dark(#c2b8a2, #0a0b09);
-  --groove-light: light-dark(#fffdf7, #30312c);
-  --rock-hi: light-dark(#c9c3b6, #a39f95);
-  --rock-mid: light-dark(#8f897d, #6a675f);
-  --rock-lo: light-dark(#5d584f, #3a3833);
-  --cast: light-dark(rgb(70 55 30 / 0.32), rgb(0 0 0 / 0.6));
-  --glow: light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.045));
-  --dusk: light-dark(rgb(130 105 65 / 0.13), rgb(0 0 0 / 0.4));
   --accent: light-dark(#a83e29, #e57a61);
-  --code-bg: light-dark(#ece8de, #1f201d);
+  --code-bg: light-dark(#ece8de, #181b21);
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -53,13 +41,7 @@
 }
 
 html {
-  /* Sand: fine grain over the base colour, lit from the top left. */
-  background-color: var(--bg);
-  background-image:
-    url('/sand.svg'),
-    radial-gradient(120% 90% at 8% -8%, var(--glow), transparent 55%),
-    radial-gradient(120% 100% at 100% 108%, var(--dusk), transparent 60%);
-  background-attachment: fixed;
+  background: var(--bg);
   scroll-padding-top: 2rem;
   -webkit-text-size-adjust: 100%;
 }
@@ -324,10 +306,10 @@ main > section {
   margin: 1.5rem 0 var(--gap);
 }
 
-/* The background garden fills the window behind the page and stays put
-   while the text scrolls. On wide screens it fades out behind the text
-   column; on narrow screens the whole drawing is kept faint. */
-.backdrop {
+/* The 3D garden fills the window behind the page and stays put while the
+   text scrolls. On wide screens it fades out behind the text column; on
+   narrow ones the whole scene is kept faint. */
+.space {
   position: fixed;
   inset: 0;
   z-index: -1;
@@ -336,108 +318,17 @@ main > section {
   pointer-events: none;
   mask-image: linear-gradient(
     to right,
-    #000 calc(50% - var(--measure) / 2 - 9rem),
-    rgb(0 0 0 / 0.22) calc(50% - var(--measure) / 2 - 1rem),
-    rgb(0 0 0 / 0.22) calc(50% + var(--measure) / 2 + 1rem),
-    #000 calc(50% + var(--measure) / 2 + 9rem)
+    #000 calc(50% - var(--measure) / 2 - 12rem),
+    rgb(0 0 0 / 0.14) calc(50% - var(--measure) / 2 - 1rem),
+    rgb(0 0 0 / 0.14) calc(50% + var(--measure) / 2),
+    #000 calc(50% + var(--measure) / 2 + 7rem)
   );
 }
 
-.backdrop-tall {
-  display: none;
-}
-
-.backdrop .rake {
-  fill: none;
-  stroke-linecap: round;
-}
-
-.rake-ridge {
-  stroke: var(--groove-ridge);
-  stroke-width: 6.5;
-}
-
-.rake-shade {
-  stroke: var(--groove-shade);
-  stroke-width: 1.5;
-}
-
-.rake-light {
-  stroke: var(--groove-light);
-  stroke-width: 1.3;
-}
-
-.rock-hi {
-  stop-color: var(--rock-hi);
-}
-
-.rock-mid {
-  stop-color: var(--rock-mid);
-}
-
-.rock-lo {
-  stop-color: var(--rock-lo);
-}
-
-.backdrop .cast,
-.backdrop .shade {
-  fill: var(--cast);
-  stroke: none;
-}
-
-/* The gardener and what it plants: small, quiet shapes with soft shadows. */
-.gardener {
-  fill: none;
-  stroke: var(--stone);
-  stroke-width: 1.3;
-  stroke-linecap: round;
-}
-
-.gardener .head {
-  fill: var(--stone);
-  stroke: none;
-}
-
-.tree .trunk {
-  stroke: var(--stone);
-  stroke-width: 1.4;
-  stroke-linecap: round;
-}
-
-.tree .leaf {
-  fill: var(--moss);
-}
-
-.tree .leaf-hi {
-  fill: var(--moss-hi);
-}
-
-/* Without wide side margins the stones move to the edges of the window. */
 @media (max-width: 60rem) {
-  .backdrop-wide {
-    display: none;
-  }
-
-  .backdrop-tall {
-    display: block;
-    opacity: 0.5;
-    mask-image: none;
-  }
-}
-
-/* On tablets the tall drawing is scaled up, so it is drawn lighter. */
-@media (min-width: 34rem) and (max-width: 60rem) {
-  .backdrop-tall {
+  .space {
     opacity: 0.4;
-  }
-
-  .backdrop-tall .rake-ridge {
-    stroke-width: 4;
-  }
-
-  .backdrop-tall .rake-shade,
-  .backdrop-tall .rake-light {
-    stroke-width: 0.8;
+    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.5), #000 70%);
   }
 }
 

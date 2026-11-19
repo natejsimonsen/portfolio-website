@@ -26,8 +26,8 @@ Put images in `public/img/` and link them as `/img/name.png`.
 - `content/site.json`: name, tagline, projects, contact links.
 - `content/about.md`: the About section.
 - `src/style.css`: colors and type. Light and dark follow the system setting; the header toggle overrides it.
-- `src/gardener.js`: the small figure that walks the background and plants trees. Trees are saved in the visitor's browser per page, so the garden fills in over visits.
-- `src/art.mjs`: the generated SVG drawings (the raked-sand page background and the post marks).
+- `src/garden3d.js`: the 3D background (three.js): a raked-sand garden on a rock floating in space, with a small gardener who plants trees. Trees are saved in the visitor's browser per page.
+- `src/art.mjs`: the small SVG marks (post ripples, the seal).
 
 ## Run it
 
