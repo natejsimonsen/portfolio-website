@@ -76,7 +76,7 @@ async function garden() {
   canvas.setAttribute('aria-hidden', 'true');
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true }); // keeps the last picture on frames that are skipped
   } catch {
     return; // no WebGL: the page keeps its plain background
   }
@@ -92,7 +92,8 @@ async function garden() {
   const [islandModel, stonesModel, treeModel] = models;
   document.body.prepend(canvas);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  canvas.addEventListener('webglcontextlost', () => canvas.remove()); // if the graphics card gives up, leave the plain page
 
   const rand = seeded(location.pathname);
   const between = (lo, hi) => lo + rand() * (hi - lo);
@@ -109,8 +110,7 @@ async function garden() {
   const sun = new THREE.DirectionalLight();
   sun.position.set(-9, 7, 4);
   sun.castShadow = true;
-  const sharp = innerWidth < 960 ? 2048 : 4096;
-  sun.shadow.mapSize.set(sharp, sharp);
+  sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 2, far: 34 });
   sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias = -0.0006;
@@ -144,14 +144,8 @@ async function garden() {
       if (look.transparent || look.alphaTest) {
         // leaves: cut out by their texture, seen from both sides
         look.transparent = false;
-        look.alphaTest = 0.3;
-        // Shrunken copies of the leaf picture (mipmaps) average its cut-out
-        // edges away, so at this small size the leaves would vanish.
-        if (look.map) {
-          look.map.generateMipmaps = false;
-          look.map.minFilter = THREE.LinearFilter;
-          look.map.needsUpdate = true;
-        }
+        look.alphaTest = 0.2;
+        look.alphaToCoverage = true; // soft leaf edges, so they do not sparkle as the rock turns
         look.side = THREE.DoubleSide;
         mesh.userData.thin = true;
       }
@@ -630,8 +624,13 @@ async function garden() {
 
   // On wide screens the box sits in the right-hand margin, clear of the
   // text. Otherwise it sits at the bottom of the window, behind the text.
+  // Phones change the window height all the time while scrolling (the
+  // address bar slides away), so only a change in width re-sizes the scene.
+  let placedFor = 0;
   const place = () => {
     const w = innerWidth;
+    if (w === placedFor) return;
+    placedFor = w;
     const h = innerHeight;
     const rem = parseFloat(getComputedStyle(root).fontSize);
     const gutter = (w - 38 * rem) / 2 - 1.5 * rem; // space beside the text column
@@ -640,7 +639,6 @@ async function garden() {
     canvas.classList.toggle('garden-low', !wide);
     canvas.style.width = canvas.style.height = `${size}px`;
     canvas.style.left = `${Math.round(wide ? w - gutter + (gutter - size) / 2 : (w - size) / 2)}px`;
-    canvas.style.top = `${Math.round(wide ? h * 0.46 - size / 2 : h - size * 0.8)}px`;
     const ratio = Math.min(devicePixelRatio, 2);
     renderer.setPixelRatio(ratio);
     renderer.setSize(size, size, false);
@@ -668,6 +666,7 @@ async function garden() {
   figure.position.set(me.x, 0.09, me.z);
   place();
   theme();
+  requestAnimationFrame(() => canvas.classList.add('garden-ready')); // fade in once the first picture is drawn
   if (!still) {
     requestAnimationFrame((ms) => {
       last = ms;
