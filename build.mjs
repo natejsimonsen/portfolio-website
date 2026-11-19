@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { marked } from 'marked';
-import { backdrop, favicon, ripples, seal } from './src/art.mjs';
+import { backdrop, favicon, grain, ripples, seal } from './src/art.mjs';
 
 const root = path.dirname(new URL(import.meta.url).pathname);
 const out = path.join(root, 'dist');
@@ -298,6 +298,7 @@ function build() {
   if (fs.existsSync(path.join(root, 'public'))) fs.cpSync(path.join(root, 'public'), out, { recursive: true });
   for (const file of ['style.css', 'gardener.js']) fs.copyFileSync(path.join(root, 'src', file), path.join(out, file));
   write('favicon.svg', favicon);
+  write('sand.svg', grain);
   write('CNAME', `${new URL(site.url).hostname}\n`);
 
   write('index.html', page(site, { description: site.tagline, url: '/', body: home(site, posts, about) }));

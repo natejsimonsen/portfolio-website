@@ -38,13 +38,13 @@ export function backdrop(seed) {
 
 // `plant` and `trees` tell the gardener script where it may plant, and how much.
 function layer(name, seed, width, zones, count, plant, trees) {
-  const { markup, stones } = sand(seed, width, 1000, zones, count);
+  const { markup, stones } = sand(name, seed, width, 1000, zones, count);
   const data = JSON.stringify(stones.map((s) => [Math.round(s.x), s.y, Math.round(s.outer * stretch)]));
   return `<svg class="backdrop backdrop-${name}" viewBox="0 0 ${width} 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true" data-stones="${data}" data-plant="${JSON.stringify(plant)}" data-trees="${trees}">${markup}</svg>
 `;
 }
 
-function sand(seed, width, height, zones, count) {
+function sand(name, seed, width, height, zones, count) {
   const rand = rng(seed);
 
   // Place stones on rake lines, inside the allowed zones, without overlap.
@@ -99,14 +99,33 @@ function sand(seed, width, height, zones, count) {
     }
     return `${path}Z`;
   };
-  let blobs = '';
+  let rocks = '';
+  let shadows = '';
   for (const s of stones) {
     for (let k = 1; k <= s.rings; k++) d += loop(s, gap * (k + 0.5), 0.015);
-    blobs += `<path d="${loop(s, s.r, 0.08)}"/>`;
+    const big = loop(s, s.r, 0.08);
+    rocks += `<path d="${big}"/>`;
+    shadows += `<path d="${big}"/>`;
     // Larger groups get a small companion stone tucked beside the big one.
-    if (s.rings >= 4) blobs += `<path d="${loop(s, s.r * 0.42, 0.1, s.r * 1.25, s.r * 0.55)}"/>`;
+    if (s.rings >= 4) {
+      const small = loop(s, s.r * 0.42, 0.1, s.r * 1.25, s.r * 0.55);
+      rocks += `<path d="${small}"/>`;
+      shadows += `<path d="${small}"/>`;
+    }
   }
-  return { markup: `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`, stones };
+
+  // The light comes from the top left. Each rake line is drawn three times
+  // (a soft ridge, a shadow, a highlight just below it) so it reads as a
+  // groove, and each stone gets a shaded face and a blurred cast shadow.
+  const markup = `<defs>
+<path id="rake-${name}" d="${d}"/>
+<radialGradient id="rock-${name}" cx="0.34" cy="0.26" r="0.9"><stop class="rock-hi" offset="0"/><stop class="rock-mid" offset="0.5"/><stop class="rock-lo" offset="1"/></radialGradient>
+<filter id="soft-${name}" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4.5"/></filter>
+</defs>
+<g class="rake"><use class="rake-ridge" href="#rake-${name}"/><use class="rake-shade" href="#rake-${name}"/><use class="rake-light" href="#rake-${name}" transform="translate(0.8 1.7)"/></g>
+<g class="cast" filter="url(#soft-${name})" transform="translate(7 9)">${shadows}</g>
+<g class="rocks" fill="url(#rock-${name})">${rocks}</g>`;
+  return { markup, stones };
 }
 
 // Ripples: a small mark for each post in a list.
@@ -138,3 +157,11 @@ const markShape = 'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="ro
 export const seal = `<svg class="seal" viewBox="0 0 32 32" aria-hidden="true"><path class="seal-bg" d="${sealBg}"/><path class="seal-mark" ${markShape} d="${sealMark}"/></svg>`;
 
 export const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#a83e29" d="${sealBg}"/><path fill="none" stroke="#f6f3ec" ${markShape} d="${sealMark}"/></svg>`;
+
+// Sand grain: a small seamless tile of fine dark and light specks, used as
+// the page's background image. Being an SVG, it stays sharp on any screen.
+// Dark specks show on the light theme and light specks on the dark one, so
+// the two opacities tune the two themes separately.
+const speck = (id, seed, colour, channel) =>
+  `<filter id="${id}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="${seed}" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 ${colour}  0 0 0 0 ${colour}  0 0 0 0 ${colour}  ${channel} -0.7"/></filter>`;
+export const grain = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">${speck('dark', 4, 0.25, '1.4 0 0 0')}${speck('light', 9, 1, '0 1.4 0 0')}<rect width="256" height="256" filter="url(#dark)" opacity="0.5"/><rect width="256" height="256" filter="url(#light)" opacity="0.16"/></svg>`;

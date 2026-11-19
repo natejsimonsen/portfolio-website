@@ -43,12 +43,21 @@
   try {
     trees = JSON.parse(localStorage.getItem(key)) || [];
   } catch {}
-  const grove = make('g', { class: 'grove' }, svg);
+  // Trees and the figure live in their own layer over the garden, so moving
+  // them never repaints the sand underneath.
+  const life = document.createElementNS(NS, 'svg');
+  life.setAttribute('class', svg.getAttribute('class'));
+  life.setAttribute('viewBox', svg.getAttribute('viewBox'));
+  life.setAttribute('preserveAspectRatio', svg.getAttribute('preserveAspectRatio'));
+  life.setAttribute('aria-hidden', 'true');
+  svg.after(life);
+  const grove = make('g', { class: 'grove' }, life);
 
   const drawTree = (tree, grown) => {
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'tree');
     const h = tree.s;
+    make('ellipse', { class: 'shade', cx: h * 0.3, cy: h * 0.05, rx: h * 0.42, ry: h * 0.1 }, g);
     make('path', { class: 'trunk', d: `M0 0V${-h * 0.5}` }, g);
     if (tree.t === 0) {
       // pine: three stacked tiers
@@ -56,16 +65,19 @@
         const y = -h * (0.3 + i * 0.22);
         const w = h * (0.34 - i * 0.08);
         make('path', { class: 'leaf', d: `M${-w} ${y}L0 ${y - h * 0.34}L${w} ${y}Z` }, g);
+        make('path', { class: 'leaf-hi', d: `M${-w} ${y}L0 ${y - h * 0.34}V${y}Z` }, g);
       }
     } else if (tree.t === 1) {
       // round crown
       make('circle', { class: 'leaf', cx: -h * 0.14, cy: -h * 0.62, r: h * 0.24 }, g);
       make('circle', { class: 'leaf', cx: h * 0.16, cy: -h * 0.58, r: h * 0.22 }, g);
       make('circle', { class: 'leaf', cx: 0, cy: -h * 0.8, r: h * 0.22 }, g);
+      make('circle', { class: 'leaf-hi', cx: -h * 0.12, cy: -h * 0.8, r: h * 0.13 }, g);
     } else {
       // low shrub
       make('ellipse', { class: 'leaf', cx: -h * 0.2, cy: -h * 0.2, rx: h * 0.3, ry: h * 0.2 }, g);
       make('ellipse', { class: 'leaf', cx: h * 0.18, cy: -h * 0.24, rx: h * 0.32, ry: h * 0.24 }, g);
+      make('ellipse', { class: 'leaf-hi', cx: h * 0.06, cy: -h * 0.32, rx: h * 0.17, ry: h * 0.1 }, g);
     }
     // Nearer trees (lower on the page) are drawn over farther ones.
     const after = [...grove.children].find((el) => Number(el.dataset.y) > tree.y);
@@ -78,7 +90,8 @@
   trees.forEach((tree) => drawTree(tree, true));
 
   // The figure, drawn with its feet at the origin.
-  const figure = make('g', { class: 'gardener' }, svg);
+  const figure = make('g', { class: 'gardener' }, life);
+  make('ellipse', { class: 'shade', cx: 5, cy: 0.6, rx: 7, ry: 1.7 }, figure);
   const body = make('g', {}, figure);
   make('circle', { class: 'head', cx: 0, cy: -19, r: 2.5 }, body);
   make('path', { d: 'M0 -16V-8' }, body);
