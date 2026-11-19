@@ -4,19 +4,19 @@
   color-scheme: light dark;
   --bg: light-dark(#f6f3ec, #0d0f14);
   --ink: light-dark(#1f1d1a, #e6e2d8);
-  --muted: light-dark(#5d5850, #a09b90);
+  --muted: light-dark(#4e4943, #aaa59a);
   --line: light-dark(#dcd6c9, #272b33);
   --sand: light-dark(#cdc5b4, #3a3b36);
-  --stone: light-dark(#8d877b, #6f6c64);
-  --accent: light-dark(#a83e29, #e57a61);
+  --stone: light-dark(#7a7468, #848075);
+  --accent: light-dark(#963522, #e57a61);
   --code-bg: light-dark(#ece8de, #181b21);
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --measure: 38rem;
-  --col: 14rem; /* label column in the project and contact lists */
+  --col: 10rem; /* label column in the project and contact lists */
   --rhythm: 3rem; /* space between sections */
-  --gap: 1.25rem; /* space under a page heading */
+  --gap: 2rem; /* space under a page heading */
   --indent: 1.4rem; /* quotes and lists */
   --radius: 3px;
   --tap: 2.75rem; /* smallest hit area on touch screens */
@@ -345,11 +345,11 @@ main > section {
   }
 
   .garden.garden-ready {
-    opacity: 0.34;
+    opacity: 0.22;
   }
 
   .garden.garden-ready.garden-night {
-    opacity: 0.3;
+    opacity: 0.22;
   }
 }
 
@@ -678,4 +678,33 @@ main > .posts:last-child li:last-child {
 
 .prose tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/* Red is kept for the seal, hover and focus, so it keeps its weight. */
+main > section > h2::before {
+  content: none;
+}
+
+a {
+  text-decoration-color: var(--stone);
+}
+
+.top nav a[aria-current] {
+  text-decoration-color: var(--ink);
+  text-underline-offset: 0.5em;
+}
+
+.project-name::after {
+  content: none;
+}
+
+/* The seal closes the page, small, after the name. */
+.bottom .seal {
+  order: 1;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.bottom p:last-child {
+  order: 2;
 }
