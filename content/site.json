@@ -1,0 +1,21 @@
+{
+  "name": "Nate Simonsen",
+  "role": "Senior DevOps / SRE",
+  "tagline": "I keep systems running, help teams ship, and automate the things that shouldn't need a human.",
+  "url": "https://natejsimonsen.com",
+  "projects": [
+    { "name": "zap", "url": "https://github.com/natejsimonsen/zap", "description": "A minimal macOS application launcher bound to Cmd+Space." },
+    { "name": "k9rs", "url": "https://github.com/natejsimonsen/k9rs", "description": "A Rust port of k9s, the Kubernetes terminal UI." },
+    { "name": "gh-tui", "url": "https://github.com/natejsimonsen/gh-tui", "description": "A minimal terminal UI for GitHub pull requests." },
+    { "name": "vimppuccin", "url": "https://github.com/natejsimonsen/vimppuccin", "description": "Vim-mode browser extension in Catppuccin colors. Zero telemetry." },
+    { "name": "ui-polish-loop", "url": "https://github.com/natejsimonsen/ui-polish-loop", "description": "A Claude Code skill: blind raters score every screen, fixers fix root causes, repeat." },
+    { "name": "claude-status-line", "url": "https://github.com/natejsimonsen/claude-status-line", "description": "A quiet one-row status under the Claude Code prompt." },
+    { "name": "obsidian-writing-tutor", "url": "https://github.com/natejsimonsen/obsidian-writing-tutor", "description": "Obsidian plugin: highlight text, get it graded with a diffed revision." }
+  ],
+  "contactNote": "The best way to reach me is email. I read everything and reply to most of it.",
+  "contact": [
+    { "label": "Email", "text": "natejsimonsen@gmail.com", "url": "mailto:natejsimonsen@gmail.com" },
+    { "label": "GitHub", "text": "github.com/natejsimonsen", "url": "https://github.com/natejsimonsen" },
+    { "label": "LinkedIn", "text": "linkedin.com/in/nate-simonsen", "url": "https://www.linkedin.com/in/nate-simonsen/" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "natejsimonsen.com",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --serve"
+  },
+  "dependencies": {
+    "marked": "^16.0.0"
+  }
+}
