@@ -71,86 +71,77 @@ export function enso(seed, id = 'enso') {
 
   return `<svg class="enso" viewBox="${x0} ${y0} ${w} ${h}" role="img" aria-label="A brush-drawn circle">
 <mask id="${id}" maskUnits="userSpaceOnUse" x="${x0}" y="${y0}" width="${w}" height="${h}">
-<path class="draw draw-slow" pathLength="1" d="${line(centre)}" stroke="#fff" stroke-width="36" fill="none"/>${streaks}
+<path class="draw" pathLength="1" d="${line(centre)}" stroke="#fff" stroke-width="36" fill="none"/>${streaks}
 </mask>
 <path class="ink" mask="url(#${id})" d="${brush}"/>
 </svg>`;
 }
 
-// Raked sand: parallel lines that bend around a few stones. It is drawn
-// twice from one seed, wide and narrow, so phones get the same line gap and
-// stone size instead of a scaled-down picture. CSS shows one or the other.
-const height = 96;
+// A dry garden: straight raked lines, with rings raked around each stone.
+// It is drawn twice from one seed, wide and narrow, so phones get the same
+// line gap and stone size instead of a scaled-down picture.
+const height = 108;
 const gap = 9;
+const stretch = 1.15; // stones and their rings are a little wider than tall
+const rings = 3;
 
 export function garden(seed) {
-  const wide = sand(seed, 720, 0);
-  const narrow = sand(seed, 360, 1);
-  return `<svg class="garden garden-wide" viewBox="0 0 720 ${height}" role="img" aria-label="Raked sand flowing around stones">${wide}</svg>
-<svg class="garden garden-narrow" viewBox="0 0 360 ${height}" aria-hidden="true">${narrow}</svg>`;
+  return `<svg class="garden garden-wide" viewBox="0 0 720 ${height}" role="img" aria-label="A raked sand garden with stones">${sand(seed, 720, 3)}</svg>
+<svg class="garden garden-narrow" viewBox="0 0 360 ${height}" aria-hidden="true">${sand(seed, 360, 2)}</svg>`;
 }
 
-function sand(seed, width, fewer) {
+function sand(seed, width, most) {
   const rand = rng(seed);
-  const count = 2 + Math.floor(rand() * 2) - fewer;
-  const rows = Math.floor(height / gap);
+  const count = Math.min(most, 2 + Math.floor(rand() * 2));
   const stones = [];
   for (let i = 0; i < count; i++) {
     const slot = width / count;
+    const r = between(rand, 8, 14);
+    const zone = r + 5 + (rings - 1) * gap + gap * 0.6; // raked rings end here
     stones.push({
-      x: slot * i + between(rand, slot * 0.25, slot * 0.75),
-      y: gap * Math.round(between(rand, rows * 0.35, rows * 0.65)),
-      r: between(rand, 11, 21),
+      x: slot * i + between(rand, slot * 0.32, slot * 0.68),
+      y: between(rand, zone + 2, height - zone - 2),
+      r,
+      zone,
+      turn: rand() * 6.28,
     });
   }
 
+  // Straight lines, lifted wherever they would cross a stone's rings.
   const phase = rand() * 6.28;
-  let lines = '';
-  for (let row = 0; row < rows; row++) {
-    const base = gap / 2 + row * gap;
-    const pts = [];
-    for (let x = -4; x <= width + 4; x += 6) {
-      let y = base + 1.3 * Math.sin(x / 95 + phase + row * 0.12);
-      for (const s of stones) {
-        const u = y - s.y;
-        const reach = Math.exp(-(((x - s.x) / (1.5 * s.r)) ** 2));
-        y = s.y + Math.sign(u || 1) * Math.sqrt(u * u + (s.r + 4) ** 2 * reach);
-      }
-      pts.push(`${pts.length ? 'L' : 'M'}${n(x)} ${n(y)}`);
+  let d = '';
+  for (let base = gap / 2; base < height; base += gap) {
+    let drawing = false;
+    for (let x = 0; x <= width; x += 6) {
+      const y = base + 0.9 * Math.sin(x / 110 + phase + base * 0.02);
+      const inside = stones.some((s) => ((x - s.x) / stretch) ** 2 + (y - s.y) ** 2 < s.zone ** 2);
+      if (!inside) d += `${drawing ? 'L' : 'M'}${n(x)} ${n(y)}`;
+      drawing = !inside;
     }
-    lines += `<path class="draw" pathLength="1" style="--i:${row}" d="${pts.join('')}"/>`;
   }
 
-  const blobs = stones
-    .map((s) => {
-      const pts = [];
-      const sides = 9;
-      for (let i = 0; i < sides; i++) {
-        const angle = (i / sides) * 6.283;
-        const r = (s.r - 3) * between(rand, 0.84, 1.04);
-        pts.push([s.x + r * 1.15 * Math.cos(angle), s.y + r * Math.sin(angle)]);
-      }
-      const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      const first = mid(pts[sides - 1], pts[0]);
-      let d = `M${n(first[0])} ${n(first[1])}`;
-      for (let i = 0; i < sides; i++) {
-        const m = mid(pts[i], pts[(i + 1) % sides]);
-        d += `Q${n(pts[i][0])} ${n(pts[i][1])} ${n(m[0])} ${n(m[1])}`;
-      }
-      return `<path d="${d}Z"/>`;
-    })
-    .join('');
+  const loop = (s, radius, wobble) => {
+    let path = '';
+    for (let i = 0; i < 36; i++) {
+      const angle = (i / 36) * 6.2832;
+      const r = radius * (1 + wobble * Math.sin(angle * 3 + s.turn));
+      path += `${i ? 'L' : 'M'}${n(s.x + r * stretch * Math.cos(angle))} ${n(s.y + r * Math.sin(angle))}`;
+    }
+    return `${path}Z`;
+  };
+  for (const s of stones) for (let k = 0; k < rings; k++) d += loop(s, s.r + 5 + k * gap, 0.025);
 
-  return `<g class="sand">${lines}</g><g class="stones">${blobs}</g>`;
+  const blobs = stones.map((s) => `<path d="${loop(s, s.r, 0.07)}"/>`).join('');
+  return `<path class="sand" d="${d}"/><g class="stones">${blobs}</g>`;
 }
 
 // Ripples: a small mark for each post in a list.
 export function ripples(seed) {
   const rand = rng(seed);
-  const cx = between(rand, 19, 25);
-  const cy = between(rand, 19, 25);
+  const cx = 22;
+  const cy = 22;
   let arcs = '';
-  const rings = 3 + Math.floor(rand() * 2);
+  const rings = 4;
   for (let i = 0; i < rings; i++) {
     const r = 5 + i * 4.6;
     const from = rand() * 6.28;
@@ -161,7 +152,7 @@ export function ripples(seed) {
     const y2 = cy + r * Math.sin(from + span);
     arcs += `<path d="M${n(x1)} ${n(y1)}A${n(r)} ${n(r)} 0 ${span > Math.PI ? 1 : 0} 1 ${n(x2)} ${n(y2)}"/>`;
   }
-  return `<svg class="ripples" viewBox="0 0 44 44" aria-hidden="true">${arcs}<circle cx="${n(cx)}" cy="${n(cy)}" r="1.7"/></svg>`;
+  return `<svg class="ripples" viewBox="2 2 40 40" aria-hidden="true">${arcs}<circle cx="${n(cx)}" cy="${n(cy)}" r="1.7"/></svg>`;
 }
 
 // A small red seal. The footer copy is coloured by CSS so it follows the
@@ -172,4 +163,4 @@ const markShape = 'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="ro
 
 export const seal = `<svg class="seal" viewBox="0 0 32 32" aria-hidden="true"><path class="seal-bg" d="${sealBg}"/><path class="seal-mark" ${markShape} d="${sealMark}"/></svg>`;
 
-export const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#b5452f" d="${sealBg}"/><path fill="none" stroke="#f6f3ec" ${markShape} d="${sealMark}"/></svg>`;
+export const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#a83e29" d="${sealBg}"/><path fill="none" stroke="#f6f3ec" ${markShape} d="${sealMark}"/></svg>`;

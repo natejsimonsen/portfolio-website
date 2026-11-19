@@ -5,7 +5,8 @@
   --ink: #1f1d1a;
   --muted: #68635b;
   --line: #dcd6c9;
-  --sand: #cfc8b9;
+  --bed: #efeadd; /* the garden's sand */
+  --sand: #cdc5b4;
   --stone: #8d877b;
   --accent: #a83e29;
   --code-bg: #ece8de;
@@ -14,8 +15,8 @@
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --measure: 38rem;
   --col: 14rem; /* label column in the project and contact lists */
-  --rhythm: 4.5rem; /* space between sections */
-  --gap: 2rem; /* space under a page heading */
+  --rhythm: 3rem; /* space between sections */
+  --gap: 1.25rem; /* space under a page heading */
   --radius: 3px;
   --tap: 2.75rem; /* smallest hit area on touch screens */
   --label-size: 0.75rem;
@@ -30,6 +31,7 @@
     --ink: #e6e2d8;
     --muted: #a09b90;
     --line: #2e2f2b;
+    --bed: #1c1d1a;
     --sand: #3a3b36;
     --stone: #6f6c64;
     --accent: #e57a61;
@@ -44,7 +46,6 @@
 }
 
 html {
-  scroll-behavior: smooth;
   scroll-padding-top: 2rem;
   -webkit-text-size-adjust: 100%;
 }
@@ -55,7 +56,7 @@ body {
   padding: 0 1.5rem;
   background: var(--bg);
   color: var(--ink);
-  font: 1.1875rem/1.7 var(--serif);
+  font: 1.1875rem/1.6 var(--serif);
   text-rendering: optimizeLegibility;
 }
 
@@ -95,11 +96,11 @@ a:hover {
 .lost a::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
   top: 50%;
+  width: max(100%, var(--tap));
   height: max(100%, var(--tap));
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
 }
 
 h1,
@@ -133,7 +134,7 @@ time,
 }
 
 main > section > h2 {
-  margin: 0 0 1.4rem;
+  margin: 0 0 0.9rem;
 }
 
 main > section > h2::before {
@@ -157,6 +158,7 @@ main > section > h2::before {
   font-size: 1.25rem;
   line-height: 1.55;
   color: var(--muted);
+  text-wrap: balance;
 }
 
 .quiet {
@@ -182,7 +184,7 @@ main > section > h2::before {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem 1.5rem;
-  padding: 2rem 0;
+  padding: 1.25rem 0;
 }
 
 .top a {
@@ -223,7 +225,7 @@ main > section > h2::before {
   align-items: center;
   gap: 1rem;
   margin-top: var(--rhythm);
-  padding: 2rem 0 3rem;
+  padding: 1.25rem 0 2rem;
   border-top: 1px solid var(--line);
 }
 
@@ -260,19 +262,23 @@ main > section {
 .hero {
   display: grid;
   grid-template-columns: 1fr auto;
-  align-items: center;
+  align-items: start;
   gap: 2rem;
-  margin-top: 3rem;
+  margin-top: 1.5rem;
 }
 
 .page-head {
-  margin: 3rem 0 var(--gap);
+  margin: 1.5rem 0 var(--gap);
 }
 
 /* Drawings. Same size on every page at each width. */
 .enso {
   width: clamp(6rem, 20vw, 9rem);
   height: auto;
+}
+
+.hero .enso {
+  align-self: center;
 }
 
 .enso .ink {
@@ -286,13 +292,16 @@ main > section {
   width: 100%;
   height: auto;
   margin: 0 0 var(--gap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bed);
 }
 
 .garden.garden-narrow {
   display: none;
 }
 
-.garden .sand path {
+.garden .sand {
   fill: none;
   stroke: var(--sand);
   stroke-width: 1.2;
@@ -320,13 +329,7 @@ main > section {
 .draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: draw 1.6s cubic-bezier(0.5, 0, 0.2, 1) forwards;
-  animation-delay: calc(var(--i, 0) * 70ms + 200ms);
-}
-
-.draw-slow {
-  animation-duration: 2.4s;
-  animation-timing-function: cubic-bezier(0.6, 0.05, 0.25, 1);
+  animation: draw 1.2s cubic-bezier(0.6, 0.05, 0.25, 1) 0.1s forwards;
 }
 
 @keyframes draw {
@@ -336,10 +339,6 @@ main > section {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
   .draw {
     animation: none;
     stroke-dashoffset: 0;
@@ -365,11 +364,16 @@ main > section {
   border-bottom: 1px solid var(--line);
 }
 
+/* A list that ends the page lets the footer rule close it. */
+main > .posts:last-child li:last-child {
+  border-bottom: 0;
+}
+
 .projects a,
 .posts a {
   display: grid;
   gap: 0.1rem 1.5rem;
-  padding: 1rem 0;
+  padding: 0.7rem 0;
   text-decoration: none;
 }
 
@@ -446,6 +450,7 @@ main > section {
 .contact li {
   display: grid;
   grid-template-columns: var(--col) 1fr;
+  column-gap: 1.5rem;
   align-items: baseline;
   padding: 0.5rem 0;
 }
@@ -502,7 +507,8 @@ main > section {
   padding: 0.1em 0.35em;
   border-radius: var(--radius);
   background: var(--code-bg);
-  font: 0.85em var(--mono);
+  font-family: var(--mono);
+  font-size: 0.85em;
 }
 
 /* The padding sits on the code so it holds on both sides when scrolled.
@@ -539,7 +545,6 @@ main > section {
   padding: 1rem 1.2rem;
   border-radius: 0;
   background: none;
-  font-size: 0.85rem;
 }
 
 .prose img {
@@ -599,7 +604,7 @@ main > section {
 
 @media (max-width: 34rem) {
   :root {
-    --rhythm: 3.5rem;
+    --rhythm: 2.5rem;
   }
 
   body {
@@ -607,7 +612,7 @@ main > section {
   }
 
   .top {
-    padding: 1.4rem 0;
+    padding: 1rem 0;
   }
 
   .top nav {
@@ -651,5 +656,6 @@ main > section {
 
   .contact li {
     grid-template-columns: 5.5rem 1fr;
+    column-gap: 0;
   }
 }
