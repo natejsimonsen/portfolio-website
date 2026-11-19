@@ -99,6 +99,7 @@ function garden() {
   };
 
   const scene = new THREE.Scene();
+  scene.background = new THREE.Color(); // set to the page's own colour, so the box never shows
   const camera = new THREE.PerspectiveCamera(28, 1, 1, 90);
   camera.position.set(0, 13, 25);
   camera.lookAt(0, -3.3, 0);
@@ -477,35 +478,13 @@ function garden() {
   }
 
   // A short trail of chips hangs below the tip, smaller the further down.
-  [0.26, 0.18, 0.13, 0.09].forEach((size, i) => {
+  [0.27, 0.17, 0.12].forEach((size, i) => {
     const mesh = new THREE.Mesh(boulder(size, [1, between(0.7, 1), between(0.7, 1.1)], { cuts: 5, moss: 0, detail: 12 }), stoneLook);
-    mesh.position.set((i % 2 ? 0.42 : -0.38) * (1 - i * 0.15), -8.2 - i * 0.78, between(-0.3, 0.3));
+    mesh.position.set([-0.7, 0.9, 0.1][i], [-8.3, -8.9, -9.9][i], [0.5, -0.6, 0.9][i]); // scattered, not in a line
     mesh.rotation.set(rand() * 6, rand() * 6, 0);
     mesh.castShadow = true;
     island.add(mesh);
   });
-
-  // The box is filled with the page's own background colour, so it never
-  // shows. At night a faint glow is painted into it behind the rock, which
-  // keeps the rock's outline readable against the dark.
-  const backdrop = (night) => {
-    const c = sheet(512);
-    const g = c.getContext('2d');
-    g.fillStyle = night ? '#0d0f14' : '#f6f3ec';
-    g.fillRect(0, 0, 512, 512);
-    if (night) {
-      const haze = g.createRadialGradient(256, 240, 0, 256, 240, 236);
-      haze.addColorStop(0, 'rgba(96, 124, 205, 0.13)');
-      haze.addColorStop(0.5, 'rgba(70, 95, 175, 0.055)');
-      haze.addColorStop(1, 'rgba(60, 80, 160, 0)');
-      g.fillStyle = haze;
-      g.fillRect(0, 0, 512, 512);
-    }
-    const texture = new THREE.CanvasTexture(c);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-  };
-  const backdrops = { day: backdrop(false), night: backdrop(true) };
 
   // Trees: pruned garden trees. Each pad of foliage is a cluster of many
   // small leaves on its own branch.
@@ -675,7 +654,7 @@ function garden() {
       }
     } else if (state === 'plant' && now > until) {
       const ahead = new THREE.Vector3(0.5, 0, 0).applyAxisAngle(up, figure.rotation.y);
-      const tree = { x: +(me.x + ahead.x).toFixed(2), z: +(me.z + ahead.z).toFixed(2), t: Math.floor(Math.random() * 3), s: +(1.2 + Math.random() * 0.5).toFixed(2) };
+      const tree = { x: +(me.x + ahead.x).toFixed(2), z: +(me.z + ahead.z).toFixed(2), t: Math.floor(Math.random() * 2), s: +(1.0 + Math.random() * 0.7).toFixed(2) };
       trees.push(tree);
       try {
         localStorage.setItem(key, JSON.stringify(trees));
@@ -716,7 +695,7 @@ function garden() {
   // Colours follow the page theme: warm low daylight, or cool moonlight.
   const theme = () => {
     const night = isNight();
-    scene.background = night ? backdrops.night : backdrops.day;
+    scene.background.set(night ? '#0d0f14' : '#f6f3ec');
     sun.color.set(night ? '#c3d0ff' : '#fff0da');
     sun.intensity = night ? 2.3 : 3.6;
     sky.color.set(night ? '#31406a' : '#fffaf0');
@@ -746,7 +725,7 @@ function garden() {
     canvas.classList.toggle('garden-low', !wide);
     canvas.style.width = canvas.style.height = `${size}px`;
     canvas.style.left = `${Math.round(wide ? w - gutter + (gutter - size) / 2 : (w - size) / 2)}px`;
-    canvas.style.top = `${Math.round(wide ? h * 0.46 - size / 2 : h - size * 0.88)}px`;
+    canvas.style.top = `${Math.round(wide ? h * 0.46 - size / 2 : h - size * 0.8)}px`;
     const ratio = Math.min(devicePixelRatio, 2);
     renderer.setPixelRatio(ratio);
     renderer.setSize(size, size, false);
