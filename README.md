@@ -26,7 +26,7 @@ Put images in `public/img/` and link them as `/img/name.png`.
 - `content/site.json`: name, tagline, projects, contact links.
 - `content/about.md`: the About section.
 - `src/style.css`: colors and type. Light and dark follow the system setting; the header toggle overrides it.
-- `src/garden3d.js`: the 3D background (three.js): a raked-sand garden on a rock floating in space, with a small gardener who plants trees. Trees are saved in the visitor's browser per page.
+- `src/garden3d.js`: the 3D background (three.js): a raked-sand garden that fills the window, shown faintly behind the text, with a small gardener who plants trees. Trees are saved in the visitor's browser per page.
 - `src/art.mjs`: the small SVG marks (post ripples, the seal).
 
 ## Run it
@@ -35,4 +35,4 @@ Put images in `public/img/` and link them as `/img/name.png`.
 
 ## Credits
 
-The 3D models in `public/models` are from [Poly Haven](https://polyhaven.com), released under CC0 (public domain): Boulder 01 (the island), Rock Moss Set 01 (the garden stones) and Jacaranda Tree. They were shrunk with gltf-transform (fewer triangles, smaller compressed textures). The tree needed two extra steps, kept in `tools/`: `alpha.mjs` merges its leaf cut-out mask into the leaf texture, and `tree.mjs` thins the foliage by keeping a fraction of whole leaves.
+The 3D models in `public/models` are from [Poly Haven](https://polyhaven.com), released under CC0 (public domain): Rock Moss Set 01 (the garden stones) and Jacaranda Tree. They were shrunk with gltf-transform (fewer triangles, smaller compressed textures). The tree needed two extra steps, kept in `tools/`: `alpha.mjs` merges its leaf cut-out mask into the leaf texture, and `tree.mjs` thins the foliage by keeping a fraction of whole leaves.

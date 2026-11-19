@@ -306,65 +306,51 @@ main > section {
   margin: 1.5rem 0 var(--gap);
 }
 
-/* Two fixed layers sit behind the page while the text scrolls over them.
-   .space is the night sky, faded out behind the text column. .garden is
-   the small 3D box with the rock; the script places and sizes it: in the
-   right-hand margin on wide screens, or low in the window (.garden-low),
-   where it is kept faint because text passes over it. Its edges are
-   feathered so the box itself never shows. */
-.space,
+/* The sand garden fills the window behind the page and stays put while
+   the text scrolls over it. It is faint everywhere, and fainter still
+   behind the text column, so the words always come first. Its height uses
+   the largest window size (lvh) so phones do not re-size it as the address
+   bar slides away. */
 .garden {
   position: fixed;
+  inset: 0 auto auto 0;
   z-index: -1;
-  pointer-events: none;
-}
-
-.space {
-  inset: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100lvh;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.4s ease;
   mask-image: linear-gradient(
     to right,
-    #000 calc(50% - var(--measure) / 2 - 6rem),
-    rgb(0 0 0 / 0.25) calc(50% - var(--measure) / 2 - 1rem),
-    rgb(0 0 0 / 0.25) calc(50% + var(--measure) / 2 + 1rem),
-    #000 calc(50% + var(--measure) / 2 + 6rem)
+    #000 calc(50% - var(--measure) / 2 - 7rem),
+    rgb(0 0 0 / 0.5) calc(50% - var(--measure) / 2),
+    rgb(0 0 0 / 0.5) calc(50% + var(--measure) / 2),
+    #000 calc(50% + var(--measure) / 2 + 7rem)
   );
 }
 
-.garden {
-  top: 46%;
-  translate: 0 -50%;
-  opacity: 0;
-  transition: opacity 1.2s ease;
-  mask-image: radial-gradient(closest-side, #000 86%, transparent 100%);
-}
-
 .garden.garden-ready {
-  opacity: 1;
+  opacity: 0.62;
 }
 
-/* Pale sand under grey text costs contrast, so by day the scene is fainter. */
-.garden.garden-low {
-  top: auto;
-  bottom: -4%;
-  translate: none;
-  /* the underside melts away instead of ending on an edge */
-  mask-image: radial-gradient(closest-side, #000 86%, transparent 100%), linear-gradient(to bottom, #000 58%, transparent 96%);
-  mask-composite: intersect;
+.garden.garden-ready.garden-night {
+  opacity: 0.5;
 }
 
-.garden.garden-low.garden-ready {
-  opacity: 0.16;
-}
+/* With no margins beside the text, the whole scene sits under it. */
+@media (max-width: 60rem) {
+  .garden {
+    mask-image: none;
+  }
 
-.garden.garden-low.garden-ready.garden-night {
-  opacity: 0.4;
-}
+  .garden.garden-ready {
+    opacity: 0.34;
+  }
 
-/* Room for short pages to end above the rock. */
-body:has(.garden-low) {
-  padding-bottom: 6rem;
+  .garden.garden-ready.garden-night {
+    opacity: 0.3;
+  }
 }
 
 .ripples {
