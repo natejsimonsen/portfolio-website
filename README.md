@@ -32,3 +32,7 @@ Put images in `public/img/` and link them as `/img/name.png`.
 ## Run it
 
 `npm install`, then `npm run dev` for a preview at http://localhost:4321 that rebuilds on save.
+
+## Credits
+
+The 3D models in `public/models` are from [Poly Haven](https://polyhaven.com), released under CC0 (public domain): Boulder 01 (the island), Rock Moss Set 01 (the garden stones) and Jacaranda Tree. They were shrunk with gltf-transform (fewer triangles, smaller compressed textures). The tree needed two extra steps, kept in `tools/`: `alpha.mjs` merges its leaf cut-out mask into the leaf texture, and `tree.mjs` thins the foliage by keeping a fraction of whole leaves.

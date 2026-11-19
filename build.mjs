@@ -342,7 +342,7 @@ function build() {
 build();
 
 if (serve) {
-  const types = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg' };
+  const types = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg' };
   for (const dir of ['posts', 'content', 'src', 'public']) {
     if (!fs.existsSync(path.join(root, dir))) continue;
     let timer;

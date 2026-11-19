@@ -2,6 +2,10 @@
 // space, drawn with three.js. A tiny gardener tends it and plants trees,
 // which are saved per page in the visitor's browser.
 //
+// The rock, the garden stones and the tree are photoscanned models from
+// Poly Haven (CC0), in public/models; see the README for credits. The sand and the gardener are made
+// here in code.
+//
 // Two fixed layers sit behind the text: a plain canvas of stars filling the
 // window, and a small WebGL box holding the rock. Keeping the 3D part small
 // is what lets it afford soft contact shading (ambient occlusion).
@@ -11,13 +15,13 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
-import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const R = 5; // rough island radius, in world units
-const EXTENT = R * 1.12; // half-width of the area the sand textures cover
+const EXTENT = R * 1.25; // half-width of the area the sand textures cover
 const SPACING = 0.25; // gap between rake lines
-const MOST_TREES = 4;
+const MOST_TREES = 3;
 
 // Seeded random numbers, so each page always gets the same garden.
 function seeded(text) {
@@ -66,7 +70,7 @@ function stars() {
   draw();
 }
 
-function garden() {
+async function garden() {
   const canvas = document.createElement('canvas');
   canvas.className = 'garden';
   canvas.setAttribute('aria-hidden', 'true');
@@ -76,27 +80,23 @@ function garden() {
   } catch {
     return; // no WebGL: the page keeps its plain background
   }
+
+  // The models load in the background; nothing shows until they are in.
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  let models;
+  try {
+    models = await Promise.all(['island', 'stones', 'jacaranda'].map((name) => loader.loadAsync(`/models/${name}.glb`)));
+  } catch {
+    return;
+  }
+  const [islandModel, stonesModel, treeModel] = models;
   document.body.prepend(canvas);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const rand = seeded(location.pathname);
   const between = (lo, hi) => lo + rand() * (hi - lo);
-  const shift = [between(0, 50), between(0, 50), between(0, 50)];
-  const perlin = new ImprovedNoise();
-  // Layered noise: `sharp` folds it into ridges, as on broken rock.
-  const fbm = (x, y, z, octaves = 4, sharp = false) => {
-    let sum = 0;
-    let size = 1;
-    let weight = 0.5;
-    for (let i = 0; i < octaves; i++) {
-      const n = perlin.noise(x * size + shift[0], y * size + shift[1], z * size + shift[2]);
-      sum += weight * (sharp ? 1 - 2 * Math.abs(n) : n);
-      size *= 2.1;
-      weight *= 0.5;
-    }
-    return sum;
-  };
+  const phase = [rand() * 6.28, rand() * 6.28, rand() * 6.28];
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(); // set to the page's own colour, so the box never shows
@@ -105,13 +105,13 @@ function garden() {
   camera.lookAt(0, -3.3, 0);
 
   // Light: a low sun or moon with shadows, sky fill, a back light that
-  // outlines the rock, and soft reflected light from all around.
+  // outlines the rock, and a little soft reflected light from all around.
   const sun = new THREE.DirectionalLight();
   sun.position.set(-9, 7, 4);
   sun.castShadow = true;
   const sharp = innerWidth < 960 ? 2048 : 4096;
   sun.shadow.mapSize.set(sharp, sharp);
-  Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 2, far: 30 });
+  Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 2, far: 34 });
   sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.025;
@@ -122,146 +122,166 @@ function garden() {
   const under = new THREE.DirectionalLight();
   under.position.set(-4, -7, 8);
   scene.add(sun, sky, back, under);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 
   const island = new THREE.Group();
   scene.add(island);
 
-  // The island's outline is an uneven circle.
-  const phase = [rand() * 6.28, rand() * 6.28, rand() * 6.28];
-  const rimAt = (a) => R * (1 + 0.055 * Math.sin(2 * a + phase[0]) + 0.035 * Math.sin(3 * a + phase[1]) + 0.05 * fbm(Math.cos(a) * 1.3, Math.sin(a) * 1.3, 3, 3));
-  const inside = (x, z, pad) => Math.hypot(x, z) < rimAt(Math.atan2(z, x)) - pad;
-
-  // Turns a greyscale height picture into a normal map.
-  const SIZE = innerWidth < 960 ? 1024 : 2048;
-  const sheet = (size = SIZE) => {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    return c;
+  // Model helpers. Scanned models arrive with packed numbers and their own
+  // offsets, so each is wrapped in a holder that stands on the origin.
+  const meshesIn = (object) => {
+    const found = [];
+    object.traverse((o) => o.isMesh && found.push(o));
+    return found;
   };
-  const normalsFrom = (heights, strength) => {
-    const size = heights.width;
-    const src = heights.getContext('2d').getImageData(0, 0, size, size).data;
-    const out = new ImageData(size, size);
-    const at = (x, y) => src[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const dx = (at(x - 1, y) - at(x + 1, y)) * strength;
-        const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
-        const k = 1 / Math.hypot(dx, dy, 1);
-        const i = (y * size + x) * 4;
-        out.data[i] = (dx * k * 0.5 + 0.5) * 255;
-        out.data[i + 1] = (dy * k * 0.5 + 0.5) * 255;
-        out.data[i + 2] = (k * 0.5 + 0.5) * 255;
-        out.data[i + 3] = 255;
+  const tune = (object) => {
+    for (const mesh of meshesIn(object)) {
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.frustumCulled = false; // the scans' packed sizes mislead the off-screen test, which was dropping leaves
+      const look = mesh.material;
+      look.envMapIntensity = 0.3;
+      look.vertexColors = false; // the scans keep wind data there, not colour; as colour it hides the leaves
+      if (look.transparent || look.alphaTest) {
+        // leaves: cut out by their texture, seen from both sides
+        look.transparent = false;
+        look.alphaTest = 0.3;
+        // Shrunken copies of the leaf picture (mipmaps) average its cut-out
+        // edges away, so at this small size the leaves would vanish.
+        if (look.map) {
+          look.map.generateMipmaps = false;
+          look.map.minFilter = THREE.LinearFilter;
+          look.map.needsUpdate = true;
+        }
+        look.side = THREE.DoubleSide;
+        mesh.userData.thin = true;
       }
     }
-    const c = sheet(size);
-    c.getContext('2d').putImageData(out, 0, 0);
-    const texture = new THREE.CanvasTexture(c);
-    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    return { texture, src };
+    return object;
+  };
+  const standing = (object) => {
+    object.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const mid = box.getCenter(new THREE.Vector3());
+    const holder = new THREE.Group();
+    object.position.sub(new THREE.Vector3(mid.x, box.min.y, mid.z));
+    holder.add(object);
+    return { holder, size };
   };
 
-  // Rock surface: mottled colour, with cracks and pits in the relief.
-  const rockColour = sheet(512);
-  const rockHeights = sheet(512);
+  // The rock is a scanned boulder turned upside down, so its broad base is
+  // the top and its crown tapers below. The top is pressed nearly flat to
+  // take the sand, keeping some of its natural bumps around the edge.
+  const rock = meshesIn(islandModel.scene)[0];
+  rock.updateWorldMatrix(true, false);
+  const rockShape = rock.geometry.clone();
   {
-    const colour = rockColour.getContext('2d');
-    const height = rockHeights.getContext('2d');
-    const tint = colour.createImageData(512, 512);
-    const relief = height.createImageData(512, 512);
-    for (let y = 0; y < 512; y++) {
-      for (let x = 0; x < 512; x++) {
-        const broad = fbm(x / 90, y / 90, 7, 4);
-        const fine = fbm(x / 14, y / 14, 11, 3, true);
-        const i = (y * 512 + x) * 4;
-        const shade = 0.82 + broad * 0.5 + fine * 0.1;
-        tint.data[i] = 118 * shade;
-        tint.data[i + 1] = 111 * shade;
-        tint.data[i + 2] = 101 * shade;
-        tint.data[i + 3] = 255;
-        const lift = 128 + broad * 70 + fine * 90;
-        relief.data[i] = relief.data[i + 1] = relief.data[i + 2] = lift;
-        relief.data[i + 3] = 255;
-      }
-    }
-    colour.putImageData(tint, 0, 0);
-    height.putImageData(relief, 0, 0);
-    for (let i = 0; i < 26; i++) {
-      // a crack: a thin dark line that wanders
-      let x = Math.random() * 512;
-      let y = Math.random() * 512;
-      let turn = Math.random() * 6.28;
-      height.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-      colour.strokeStyle = 'rgba(30, 26, 22, 0.35)';
-      height.lineWidth = colour.lineWidth = 1 + Math.random() * 1.4;
-      height.beginPath();
-      colour.beginPath();
-      for (let k = 0; k < 28; k++) {
-        height.lineTo(x, y);
-        colour.lineTo(x, y);
-        turn += (Math.random() - 0.5) * 0.9;
-        x += Math.cos(turn) * 9;
-        y += Math.sin(turn) * 9;
-      }
-      height.stroke();
-      colour.stroke();
-    }
-  }
-  const rockMap = new THREE.CanvasTexture(rockColour);
-  rockMap.colorSpace = THREE.SRGBColorSpace;
-  const rockNormal = normalsFrom(rockHeights, 5).texture;
-  for (const t of [rockMap, rockNormal]) {
-    t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping;
-    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  }
-
-  // A boulder: a lump of noise with flat breaks sliced into it, hard edges
-  // where the breaks meet, and moss gathered on the top.
-  const stoneGrey = new THREE.Color('#ffffff');
-  const mossGreen = new THREE.Color('#7f8f5c');
-  const boulder = (radius, squash, { rnd = rand, cuts = 7, moss = 0.7, detail = 30 } = {}) => {
-    const g = new THREE.SphereGeometry(radius, detail, Math.round(detail * 0.7));
-    const at = g.attributes.position;
+    const packed = rockShape.attributes.position;
+    const spots = new Float32Array(packed.count * 3);
     const v = new THREE.Vector3();
-    const offset = rnd() * 40;
-    const planes = [];
-    for (let i = 0; i < cuts; i++) planes.push({ n: new THREE.Vector3(rnd() - 0.5, rnd() * 0.9 - 0.15, rnd() - 0.5).normalize(), d: radius * (0.66 + rnd() * 0.24) });
-    const shades = [];
+    for (let i = 0; i < packed.count; i++) v.fromBufferAttribute(packed, i).applyMatrix4(rock.matrixWorld).toArray(spots, i * 3);
+    rockShape.setAttribute('position', new THREE.BufferAttribute(spots, 3));
+    rockShape.rotateX(Math.PI);
+    rockShape.computeBoundingBox();
+    const box = rockShape.boundingBox;
+    const size = box.getSize(new THREE.Vector3());
+    const mid = box.getCenter(new THREE.Vector3());
+    rockShape.translate(-mid.x, -box.max.y, -mid.z);
+    rockShape.scale((2 * R * 1.08) / size.x, 10.5 / size.y, (2 * R * 1.0) / size.z);
+    rockShape.translate(0, 2.8, 0); // the top 2.8 units are what gets pressed flat
+  }
+  // The outline of the rock where the sand will sit, by direction.
+  const BINS = 120;
+  const reach = new Float32Array(BINS);
+  {
+    const at = rockShape.attributes.position;
     for (let i = 0; i < at.count; i++) {
-      v.fromBufferAttribute(at, i);
-      const n = v.clone().divideScalar(radius);
-      v.multiplyScalar(1 + 0.2 * fbm(n.x * 1.3 + offset, n.y * 1.3, n.z * 1.3, 3));
-      for (const plane of planes) {
-        const over = v.dot(plane.n) - plane.d;
-        if (over > 0) v.addScaledVector(plane.n, -over);
-      }
-      at.setXYZ(i, v.x * squash[0], v.y * squash[1], v.z * squash[2]);
-      const green = Math.min(1, Math.max(0, (n.y - 0.25 + 0.9 * fbm(n.x * 2.4 + offset, n.y * 2.4, n.z * 2.4, 3)) * 2.4)) * moss;
-      const c = stoneGrey.clone().lerp(mossGreen, green).multiplyScalar(0.72 + 0.4 * (n.y * 0.5 + 0.5)); // weathered pale on top, dark at the base
-      shades.push(c.r, c.g, c.b);
+      if (at.getY(i) < -0.25) continue;
+      const bin = Math.floor(((Math.atan2(at.getZ(i), at.getX(i)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * BINS) % BINS;
+      reach[bin] = Math.max(reach[bin], Math.hypot(at.getX(i), at.getZ(i)));
     }
-    g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
-    return toCreasedNormals(g, 0.55);
+    const rough = Array.from(reach, (r, i) => r || reach[(i + 1) % BINS] || R);
+    for (let i = 0; i < BINS; i++) {
+      let sum = 0;
+      for (let k = -5; k <= 5; k++) sum += rough[(i + k + BINS) % BINS];
+      reach[i] = sum / 11;
+    }
+  }
+  const rimAt = (a) => {
+    const at = (((a + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2)) * BINS;
+    const low = Math.floor(at) % BINS;
+    const t = at - Math.floor(at);
+    return reach[low] * (1 - t) + reach[(low + 1) % BINS] * t;
   };
+  const SAND = 0.9; // the sand stops this far out; beyond it is bare rock
+  const inside = (x, z, pad) => Math.hypot(x, z) < rimAt(Math.atan2(z, x)) * SAND - pad;
+  {
+    const at = rockShape.attributes.position;
+    for (let i = 0; i < at.count; i++) {
+      const y = at.getY(i);
+      if (y <= 0) continue;
+      const x = at.getX(i);
+      const z = at.getZ(i);
+      const out = Math.hypot(x, z) / rimAt(Math.atan2(z, x));
+      const keep = 0.3 * Math.min(1, Math.max(0, (out - 0.84) / 0.14)) ** 2; // flat in the middle, bumpy at the rim
+      at.setY(i, y * keep);
+    }
+    rockShape.deleteAttribute('normal'); // the scan's packed normals cannot hold new values; start fresh
+    rockShape.computeVertexNormals();
+  }
+  const rockLook = rock.material;
+  rockLook.envMapIntensity = 0.3;
+  const body = new THREE.Mesh(rockShape, rockLook);
+  body.castShadow = body.receiveShadow = true;
+  island.add(body);
 
   // Three stones in one group to one side: tall, low, and small.
   const centre = rand() * 6.28;
-  const group = { x: Math.cos(centre) * 1.5, z: Math.sin(centre) * 1.5 };
+  const group = { x: Math.cos(centre) * 1.2, z: Math.sin(centre) * 1.2 };
   const turn = rand() * 6.28;
   const stones = [
-    { x: group.x, z: group.z, r: 0.66, squash: [1, 1.15, 0.85], rings: 4 },
-    { x: group.x + Math.cos(turn) * 2.2, z: group.z + Math.sin(turn) * 2.2, r: 0.52, squash: [1.3, 0.55, 1], rings: 2 },
-    { x: group.x + Math.cos(turn + 2.3) * 0.9, z: group.z + Math.sin(turn + 2.3) * 0.9, r: 0.28, squash: [1, 0.8, 1.1], rings: 0 },
+    { x: group.x, z: group.z, r: 0.62, rings: 4, model: 0, tall: 1.25 },
+    { x: group.x + Math.cos(turn) * 2.1, z: group.z + Math.sin(turn) * 2.1, r: 0.5, rings: 2, model: 3, tall: 0.75 },
+    { x: group.x + Math.cos(turn + 2.3) * 0.86, z: group.z + Math.sin(turn + 2.3) * 0.86, r: 0.27, rings: 0, model: 1, tall: 1 },
   ];
   for (const s of stones) s.field = s.rings ? s.r * 1.05 + 0.12 + s.rings * SPACING : 0;
+  const scanned = meshesIn(tune(stonesModel.scene));
+  const stoneAt = (index, width, tall) => {
+    const source = scanned[index % scanned.length];
+    source.updateWorldMatrix(true, false);
+    const copy = new THREE.Mesh(source.geometry, source.material);
+    copy.applyMatrix4(source.matrixWorld);
+    copy.castShadow = copy.receiveShadow = true;
+    const { holder, size } = standing(copy);
+    const k = width / Math.max(size.x, size.z);
+    holder.scale.set(k, k * tall, k);
+    return { holder, height: size.y * k * tall };
+  };
+  for (const s of stones) {
+    const { holder, height } = stoneAt(s.model, s.r * 2.1, s.tall);
+    holder.position.set(s.x, -height * 0.2, s.z); // sunk well into the sand
+    holder.rotation.y = rand() * 6;
+    island.add(holder);
+  }
+  // A few chips of the same rock hang below the tip, scattered.
+  [0.5, 0.34, 0.22].forEach((width, i) => {
+    const { holder } = stoneAt(i + 2, width, 1);
+    holder.position.set([-0.8, 1.0, 0.1][i], [-8.6, -9.2, -10][i], [0.5, -0.6, 0.9][i]);
+    holder.rotation.set(rand() * 6, rand() * 6, rand() * 6);
+    island.add(holder);
+  });
 
   // Sand: a colour picture and a height picture. The heights shape the
   // surface itself and also light the fine grain.
+  const SIZE = innerWidth < 960 ? 1024 : 2048;
+  const sheet = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = SIZE;
+    return c;
+  };
   const px = (v) => (v / EXTENT / 2 + 0.5) * SIZE;
   const len = (v) => (v / EXTENT / 2) * SIZE;
+  const wander = (x, z) => 0.05 * Math.sin(x * 0.7 + phase[0]) * Math.cos(z * 0.9 + phase[1]) + 0.025 * Math.sin(x * 1.9 + z * 1.3 + phase[2]);
   const rake = (ctx, colour, flat, width) => {
     ctx.strokeStyle = colour;
     ctx.lineCap = 'round';
@@ -270,7 +290,7 @@ function garden() {
       row++;
       ctx.lineWidth = len(width * (1 + 0.16 * Math.sin(row * 2.7 + phase[1]))); // the rake is never perfectly even
       ctx.beginPath();
-      for (let x = -EXTENT; x <= EXTENT; x += 0.08) ctx.lineTo(px(x), px(z + 0.05 * fbm(x * 0.5, z * 0.5, 5, 2) + 0.012 * Math.sin(x * 4.1 + row)));
+      for (let x = -EXTENT; x <= EXTENT; x += 0.08) ctx.lineTo(px(x), px(z + wander(x, z) + 0.012 * Math.sin(x * 4.1 + row)));
       ctx.stroke();
     }
     for (const s of stones) {
@@ -290,15 +310,13 @@ function garden() {
         ctx.stroke();
       }
     }
-  };
-  // At the edge the rake turns: the straight rows stop short of the rim,
-  // and two rows follow the rim round instead.
-  const border = (ctx, colour, flat, width) => {
+    // At the edge the rake turns: the straight rows stop short, and two
+    // rows follow the edge of the sand round instead.
     const trace = (scale) => {
       ctx.beginPath();
-      for (let i = 0; i <= 200; i++) {
-        const a = (i / 200) * Math.PI * 2;
-        ctx.lineTo(px(Math.cos(a) * rimAt(a) * scale), px(Math.sin(a) * rimAt(a) * scale));
+      for (let i = 0; i <= 240; i++) {
+        const a = (i / 240) * Math.PI * 2;
+        ctx.lineTo(px(Math.cos(a) * rimAt(a) * SAND * scale), px(Math.sin(a) * rimAt(a) * SAND * scale));
       }
       ctx.closePath();
       ctx.stroke();
@@ -309,7 +327,7 @@ function garden() {
     ctx.strokeStyle = colour;
     ctx.lineWidth = len(width);
     trace(0.925);
-    trace(0.875);
+    trace(0.87);
   };
   const speckle = (ctx, count, shades) => {
     for (let i = 0; i < count; i++) {
@@ -326,7 +344,6 @@ function garden() {
     ctx.fillRect(0, 0, SIZE, SIZE);
     ctx.filter = `blur(${SIZE / 700}px)`;
     rake(ctx, 'rgba(110, 88, 55, 0.16)', 'rgba(215, 203, 177, 1)', 0.1);
-    border(ctx, 'rgba(110, 88, 55, 0.16)', 'rgba(215, 203, 177, 1)', 0.1);
     ctx.filter = 'none';
     // sand is never one even tone: broad soft patches, a few percent lighter or darker
     for (let i = 0; i < 46; i++) {
@@ -360,7 +377,6 @@ function garden() {
     h.fillRect(0, 0, SIZE, SIZE);
     h.filter = `blur(${SIZE / 330}px)`; // a wide blur turns each line into a rounded trough
     rake(h, 'rgba(20, 20, 20, 1)', 'rgba(160, 160, 160, 1)', 0.12);
-    border(h, 'rgba(20, 20, 20, 1)', 'rgba(160, 160, 160, 1)', 0.12);
     // sand banked up around each stone
     for (const s of stones) {
       h.strokeStyle = 'rgba(245, 245, 245, 0.9)';
@@ -372,26 +388,50 @@ function garden() {
     h.filter = 'none';
     speckle(h, grains * 2.5, ['rgba(255, 255, 255, 0.09)', 'rgba(0, 0, 0, 0.09)']);
   }
-  const sandRelief = normalsFrom(heights, SIZE / 170);
+  const relief = heights.getContext('2d').getImageData(0, 0, SIZE, SIZE).data;
+  const normalSheet = sheet();
+  {
+    const out = new ImageData(SIZE, SIZE);
+    const strength = SIZE / 170;
+    const at = (x, y) => relief[(Math.min(SIZE - 1, Math.max(0, y)) * SIZE + Math.min(SIZE - 1, Math.max(0, x))) * 4] / 255;
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        const dx = (at(x - 1, y) - at(x + 1, y)) * strength;
+        const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+        const k = 1 / Math.hypot(dx, dy, 1);
+        const i = (y * SIZE + x) * 4;
+        out.data[i] = (dx * k * 0.5 + 0.5) * 255;
+        out.data[i + 1] = (dy * k * 0.5 + 0.5) * 255;
+        out.data[i + 2] = (k * 0.5 + 0.5) * 255;
+        out.data[i + 3] = 255;
+      }
+    }
+    normalSheet.getContext('2d').putImageData(out, 0, 0);
+  }
+  const sandNormal = new THREE.CanvasTexture(normalSheet);
+  sandNormal.anisotropy = sandMap.anisotropy;
   const heightAt = (x, z) => {
     const col = Math.min(SIZE - 1, Math.max(0, Math.round(px(x))));
     const row = Math.min(SIZE - 1, Math.max(0, Math.round(px(z))));
-    return (sandRelief.src[(row * SIZE + col) * 4] / 255 - 0.627) * 0.085;
+    return (relief[(row * SIZE + col) * 4] / 255 - 0.627) * 0.085;
   };
-  const sandLook = new THREE.MeshStandardMaterial({ map: sandMap, normalMap: sandRelief.texture, roughness: 1, envMapIntensity: 0.4 });
+  const sandLook = new THREE.MeshStandardMaterial({ map: sandMap, normalMap: sandNormal, roughness: 1, envMapIntensity: 0.4 });
   {
     const rings = 150;
     const spokes = 260;
-    const spots = [0, heightAt(0, 0), 0];
+    const lift = 0.09; // the sand lies a little above the flattened rock
+    const spots = [0, heightAt(0, 0) + lift, 0];
     const uvs = [0.5, 0.5];
     const faces = [];
     for (let i = 1; i <= rings; i++) {
       for (let j = 0; j < spokes; j++) {
         const a = (j / spokes) * Math.PI * 2;
-        const r = (i / rings) * rimAt(a) * 0.985;
+        const t = i / rings;
+        const r = t * rimAt(a) * SAND;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
-        spots.push(x, heightAt(x, z), z);
+        const slope = Math.max(0, (t - 0.94) / 0.06) ** 2; // the edge of the sand slopes down onto the rock
+        spots.push(x, heightAt(x, z) + lift * (1 - slope) - 0.03 * slope, z);
         uvs.push(x / EXTENT / 2 + 0.5, 0.5 - z / EXTENT / 2);
       }
     }
@@ -410,93 +450,9 @@ function garden() {
     island.add(sand);
   }
 
-  // The rock: its top edge rises unevenly around the sand as a natural
-  // rim, then the mass below breaks into ridges and narrows to a point.
-  const rockLook = new THREE.MeshStandardMaterial({ map: rockMap, normalMap: rockNormal, normalScale: new THREE.Vector2(1.6, 1.6), vertexColors: true, roughness: 0.97, envMapIntensity: 0.5 });
-  {
-    const T = 220;
-    const steps = 46;
-    const spots = [];
-    const shades = [];
-    const uvs = [];
-    const faces = [];
-    const edge = (a, k) => fbm(Math.cos(a) * k, Math.sin(a) * k, 9 + k, 3); // noise that joins up around the rim
-    let count = 0;
-    const ring = (place) => {
-      count++;
-      for (let j = 0; j <= T; j++) {
-        const a = (j / T) * Math.PI * 2;
-        const [r, y, shade, v] = place(a);
-        spots.push(Math.cos(a) * r, y, Math.sin(a) * r);
-        shades.push(shade, shade, shade);
-        uvs.push((j / T) * 13, v);
-      }
-    };
-    ring((a) => [rimAt(a) * 0.92, -0.06, 0.9, 0]); // under the sand
-    ring((a) => [rimAt(a) * (0.97 + 0.02 * edge(a, 2.6)), 0.05 + 0.1 * (edge(a, 3.4) + 0.4), 1.0, 0.05]); // inner lip
-    ring((a) => [rimAt(a) * (1.005 + 0.03 * edge(a, 2.1)), 0.07 + 0.15 * (edge(a, 3.4) + 0.4) + 0.07 * edge(a, 7), 1.04, 0.12]); // crest
-    ring((a) => [rimAt(a) * (1.04 + 0.03 * edge(a, 2.1)), -0.05 + 0.08 * edge(a, 5), 0.95, 0.2]);
-    for (let k = 1; k <= steps; k++) {
-      const v = k / steps;
-      const y0 = -0.03 - 7.4 * v;
-      ring((a) => {
-        const x = Math.cos(a);
-        const z = Math.sin(a);
-        const crag = Math.min(1, v * 3.2) ** 2; // the rock breaks up gradually below the rim, with no ledge
-        const ridges = 0.44 * fbm(x * 1.1, y0 * 0.42, z * 1.1, 5, true) + 0.12 * fbm(x * 3.3, y0 * 1.2, z * 3.3, 3);
-        const r = rimAt(a) * 1.04 * (1 - v) ** 0.92 * (1 + crag * ridges);
-        const y = y0 + crag * 0.22 * fbm(x * 1.6, y0 * 0.5, z * 1.6, 3);
-        const hollow = 0.72 + 0.9 * Math.max(-0.3, ridges); // darker in the hollows between ridges
-        return [Math.max(0.02, r), y, hollow * (1 - 0.5 * v) * (v < 0.1 ? 0.84 : 1), 0.2 + v * 3.4];
-      });
-    }
-    for (let i = 0; i < count - 1; i++) {
-      for (let j = 0; j < T; j++) {
-        const a = i * (T + 1) + j;
-        const b = a + T + 1;
-        faces.push(a, a + 1, b, b, a + 1, b + 1);
-      }
-    }
-    const shape = new THREE.BufferGeometry();
-    shape.setAttribute('position', new THREE.Float32BufferAttribute(spots, 3));
-    shape.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
-    shape.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    shape.setIndex(faces);
-    shape.computeVertexNormals();
-    const body = new THREE.Mesh(shape, rockLook);
-    body.castShadow = body.receiveShadow = true;
-    island.add(body);
-  }
-
-  const stoneLook = new THREE.MeshStandardMaterial({ map: rockMap, normalMap: rockNormal, normalScale: new THREE.Vector2(1.2, 1.2), vertexColors: true, roughness: 0.98, envMapIntensity: 0.2 });
-  for (const s of stones) {
-    const mesh = new THREE.Mesh(boulder(s.r, s.squash), stoneLook);
-    mesh.position.set(s.x, s.r * s.squash[1] * 0.16, s.z); // sunk well into the sand
-    mesh.rotation.set(between(-0.15, 0.15), rand() * 6, between(-0.15, 0.15));
-    mesh.castShadow = mesh.receiveShadow = true;
-    island.add(mesh);
-  }
-
-  // A short trail of chips hangs below the tip, smaller the further down.
-  [0.27, 0.17, 0.12].forEach((size, i) => {
-    const mesh = new THREE.Mesh(boulder(size, [1, between(0.7, 1), between(0.7, 1.1)], { cuts: 5, moss: 0, detail: 12 }), stoneLook);
-    mesh.position.set([-0.7, 0.9, 0.1][i], [-8.3, -8.9, -9.9][i], [0.5, -0.6, 0.9][i]); // scattered, not in a line
-    mesh.rotation.set(rand() * 6, rand() * 6, 0);
-    mesh.castShadow = true;
-    island.add(mesh);
-  });
-
-  // Trees: pruned garden trees. Each pad of foliage is a cluster of many
-  // small leaves on its own branch.
-  const bark = new THREE.MeshStandardMaterial({ color: '#4d3f31', roughness: 1, envMapIntensity: 0.3 });
-  const foliage = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true, envMapIntensity: 0.3 });
-  const up = new THREE.Vector3(0, 1, 0);
-  const stick = (from, to, wideFrom, wideTo) => {
-    const span = to.clone().sub(from);
-    const g = new THREE.CylinderGeometry(wideTo, wideFrom, span.length(), 7).translate(0, span.length() / 2, 0);
-    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, span.clone().normalize()));
-    return g.translate(from.x, from.y, from.z);
-  };
+  // Trees: one scanned tree, scaled to garden size. Each one the gardener
+  // plants is a copy of it, turned and sized differently.
+  const treeKind = tune(treeModel.scene);
   const key = `space-garden:${location.pathname}`;
   let trees = [];
   try {
@@ -504,67 +460,12 @@ function garden() {
   } catch {}
   const buildTree = (tree, grown) => {
     const pick = seeded(`${tree.x},${tree.z}`);
-    const h = tree.s;
-    const wood = [];
-    const leaf = [];
-    const tone = tree.t === 0 ? [0.11, 0.18, 0.11] : [0.19, 0.25, 0.12]; // pine is darker and bluer
-    const pad = (at, wide, flat) => {
-      const leaves = 46;
-      for (let i = 0; i < leaves; i++) {
-        const a = pick() * 6.28;
-        const far = Math.sqrt(pick());
-        const lift = (pick() - 0.35) * flat;
-        const g = new THREE.IcosahedronGeometry(wide * (0.17 + pick() * 0.15), 0);
-        g.rotateX(pick() * 3).rotateY(pick() * 3).scale(1, 0.5, 1); // each tuft is flattened
-        g.translate(at.x + Math.cos(a) * far * wide, at.y + lift * wide * (1 - far * 0.6), at.z + Math.sin(a) * far * wide);
-        const light = 0.62 + 0.55 * (lift / flat + 0.35) + (pick() - 0.5) * 0.18; // darker underneath, lighter on top
-        const shades = [];
-        for (let k = 0; k < g.attributes.position.count; k++) shades.push(tone[0] * light, tone[1] * light, tone[2] * light);
-        g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
-        leaf.push(g);
-      }
-    };
-    const v = (x, y, z) => new THREE.Vector3(x * h, y * h, z * h);
-    const lean = (pick() - 0.5) * 0.3;
-    if (tree.t === 0) {
-      // pine: a trunk that sways, with flat pads on short branches up both sides
-      const joints = [v(0, 0, 0), v(lean * 0.4, 0.34, 0.03), v(lean * 0.2, 0.66, -0.03), v(lean * 0.5, 0.95, 0)];
-      joints.slice(1).forEach((p, i) => wood.push(stick(joints[i], p, h * (0.075 - i * 0.02), h * (0.055 - i * 0.02))));
-      for (let i = 0; i < 5; i++) {
-        const t = 0.3 + i * 0.16;
-        const side = i % 2 ? 1 : -1;
-        const a = pick() * 6.28;
-        const from = v(lean * t * 0.5, t, 0);
-        const reach = (0.34 - i * 0.055) * (i === 4 ? 0.2 : 1);
-        const to = v(lean * t * 0.5 + Math.cos(a) * reach * side, t + 0.05, Math.sin(a) * reach);
-        if (i < 4) wood.push(stick(from, to, h * 0.022, h * 0.012));
-        pad(to, h * (0.29 - i * 0.04), 0.2);
-      }
-    } else if (tree.t === 1) {
-      // cloud-pruned tree: a bent trunk that forks, each fork ending in a pad
-      const fork = v(0.12 + lean, 0.42, 0);
-      wood.push(stick(v(0, 0, 0), fork, h * 0.08, h * 0.05));
-      const ends = [v(0.3 + lean, 0.86, 0.05), v(-0.26 + lean, 0.66, 0.12), v(0.44 + lean, 0.52, -0.16), v(-0.02 + lean, 1.04, -0.08)];
-      ends.forEach((end, i) => {
-        wood.push(stick(fork, end, h * 0.04, h * 0.016));
-        pad(end, h * [0.32, 0.25, 0.21, 0.17][i], 0.24);
-      });
-    } else {
-      // a low mound of shrub
-      pad(v(0, 0.08, 0), h * 0.32, 0.36);
-      pad(v(0.22, 0.06, 0.1), h * 0.2, 0.36);
-    }
+    const { holder, size } = standing(treeKind.clone(true));
+    holder.scale.setScalar((tree.s * (tree.t === 1 ? 1.9 : 1.45)) / size.y);
+    holder.rotation.y = pick() * 6;
     const g = new THREE.Group();
-    if (wood.length) {
-      const trunk = new THREE.Mesh(mergeGeometries(wood), bark);
-      trunk.castShadow = true;
-      g.add(trunk);
-    }
-    const crown = new THREE.Mesh(mergeGeometries(leaf), foliage);
-    crown.castShadow = crown.receiveShadow = true;
-    g.add(crown);
-    g.position.set(tree.x, 0, tree.z);
-    g.rotation.y = pick() * 6;
+    g.add(holder);
+    g.position.set(tree.x, 0.05, tree.z);
     g.scale.setScalar(grown ? 1 : 0.02);
     island.add(g);
     return g;
@@ -583,6 +484,7 @@ function garden() {
     parent.add(mesh);
     return mesh;
   };
+  const up = new THREE.Vector3(0, 1, 0);
   const figure = new THREE.Group();
   figure.scale.setScalar(1.3);
   const torso = new THREE.Group();
@@ -603,9 +505,9 @@ function garden() {
   figure.add(torso);
   island.add(figure);
 
-  // Where the gardener may walk and plant: open sand, away from the rim,
+  // Where the gardener may walk and plant: open sand, away from the edge,
   // the stones and their rings.
-  const blocked = (x, z, pad) => !inside(x, z, 0.8 + pad) || stones.some((s) => Math.hypot(x - s.x, z - s.z) < Math.max(s.field, s.r * 1.4) + pad);
+  const blocked = (x, z, pad) => !inside(x, z, 0.7 + pad) || stones.some((s) => Math.hypot(x - s.x, z - s.z) < Math.max(s.field, s.r * 1.4) + pad);
   const crosses = (x1, z1, x2, z2) => {
     for (let t = 0; t <= 1; t += 0.05) if (blocked(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t, 0)) return true;
     return false;
@@ -613,17 +515,17 @@ function garden() {
   const spot = (from) => {
     for (let i = 0; i < 80; i++) {
       const a = Math.random() * Math.PI * 2;
-      const far = (0.45 + 0.4 * Math.random()) * rimAt(a);
+      const far = (0.4 + 0.42 * Math.random()) * rimAt(a) * SAND;
       const x = Math.cos(a) * far;
       const z = Math.sin(a) * far;
       if (blocked(x, z, 0.3)) continue;
-      if (trees.some((t) => Math.hypot(t.x - x, t.z - z) < 1.3)) continue;
+      if (trees.some((t) => Math.hypot(t.x - x, t.z - z) < 1.5)) continue;
       if (from && crosses(from.x, from.z, x, z)) continue;
       return { x, z };
     }
     return null;
   };
-  const me = spot() || { x: 0, z: R - 1.6 };
+  const me = spot() || { x: 0, z: 2 };
   let state = 'rest';
   let until = 2;
   let target = null;
@@ -654,7 +556,7 @@ function garden() {
       }
     } else if (state === 'plant' && now > until) {
       const ahead = new THREE.Vector3(0.5, 0, 0).applyAxisAngle(up, figure.rotation.y);
-      const tree = { x: +(me.x + ahead.x).toFixed(2), z: +(me.z + ahead.z).toFixed(2), t: Math.floor(Math.random() * 2), s: +(1.0 + Math.random() * 0.7).toFixed(2) };
+      const tree = { x: +(me.x + ahead.x).toFixed(2), z: +(me.z + ahead.z).toFixed(2), t: trees.length % 2, s: +(1.0 + Math.random() * 0.6).toFixed(2) };
       trees.push(tree);
       try {
         localStorage.setItem(key, JSON.stringify(trees));
@@ -673,14 +575,26 @@ function garden() {
     legB.rotation.z = -swing;
     torso.rotation.z = state === 'plant' ? -0.55 : 0;
     rakeTool.rotation.z = 0.3 + (state === 'rest' ? Math.sin(now * 0.7) * 0.06 : 0);
-    figure.position.set(me.x, 0, me.z);
+    figure.position.set(me.x, 0.09, me.z);
   };
 
   // Drawing goes through a second pass that darkens creases and contact
-  // points, which is most of what makes small objects look solid.
+  // points, which is most of what makes small objects look solid. Leaves
+  // are flat cut-outs, so they sit that pass out.
+  class ContactPass extends GTAOPass {
+    _overrideVisibility() {
+      super._overrideVisibility();
+      this.scene.traverse((o) => {
+        if (o.userData.thin && o.visible) {
+          o.visible = false;
+          this._visibilityCache.push(o);
+        }
+      });
+    }
+  }
   const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { samples: 4, type: THREE.HalfFloatType }));
   composer.addPass(new RenderPass(scene, camera));
-  const contact = new GTAOPass(scene, camera, 4, 4);
+  const contact = new ContactPass(scene, camera, 4, 4);
   contact.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.3, scale: 1.25, samples: 16 });
   composer.addPass(contact);
   composer.addPass(new OutputPass());
@@ -693,6 +607,7 @@ function garden() {
   };
 
   // Colours follow the page theme: warm low daylight, or cool moonlight.
+  const tinted = [rockLook, ...new Set(meshesIn(stonesModel.scene).map((m) => m.material))];
   const theme = () => {
     const night = isNight();
     scene.background.set(night ? '#0d0f14' : '#f6f3ec');
@@ -708,7 +623,7 @@ function garden() {
     scene.environmentIntensity = night ? 0.05 : 0.1; // only a little, or it washes out the shadows
     sandLook.roughness = night ? 0.72 : 1; // a faint silver sheen on the ridges under the moon
     sandLook.color.set(night ? '#e3e8f8' : '#ffffff'); // moonlit sand is cooler and stays lighter than the rock
-    rockLook.color.set(night ? '#aab0c2' : '#ffffff');
+    for (const look of tinted) look.color.set(night ? '#aab2cc' : '#ffffff');
     canvas.classList.toggle('garden-night', night);
     draw();
   };
@@ -750,7 +665,7 @@ function garden() {
 
   addEventListener('resize', place);
   onTheme(theme);
-  figure.position.set(me.x, 0, me.z);
+  figure.position.set(me.x, 0.09, me.z);
   place();
   theme();
   if (!still) {
