@@ -15,6 +15,9 @@ const out = path.join(root, 'dist');
 const serve = process.argv.includes('--serve');
 const drafts = serve || process.argv.includes('--drafts');
 
+// Added to the stylesheet and script links, so a new build is never mixed with cached old files.
+const stamp = Date.now().toString(36);
+
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 
@@ -120,8 +123,8 @@ function page(site, { title, description, url, body, current, currentType = 'pag
 <link rel="canonical" href="${site.url}${url}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="application/atom+xml" title="${esc(site.name)}" href="/feed.xml">
-<link rel="stylesheet" href="/style.css">
-<script type="module" src="/garden3d.js"></script>
+<link rel="stylesheet" href="/style.css?v=${stamp}">
+<script type="module" src="/garden3d.js?v=${stamp}"></script>
 <script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
