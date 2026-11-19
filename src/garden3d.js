@@ -68,10 +68,10 @@ function start() {
 
   // A lumpy round shape with smooth shading: stones, moss-covered rocks,
   // tree crowns, fragments. `cuts` slices a few flat faces into it, and
-  // `moss` tints the upper, shaded side green.
+  // `moss` tints the upper, shaded side green, and `tint` darkens the underside.
   const stoneGrey = new THREE.Color('#8f897e');
   const mossGreen = new THREE.Color('#5f6b48');
-  const lump = (radius, amount, squash = [1, 1, 1], { rnd = rand, cuts = 0, moss = false, detail = 36 } = {}) => {
+  const lump = (radius, amount, squash = [1, 1, 1], { rnd = rand, cuts = 0, moss = false, tint = false, detail = 36 } = {}) => {
     const g = new THREE.SphereGeometry(radius, detail, Math.round(detail * 0.72));
     const at = g.attributes.position;
     const v = new THREE.Vector3();
@@ -89,13 +89,17 @@ function start() {
         if (over > 0) v.addScaledVector(plane.n, -over);
       }
       at.setXYZ(i, v.x * squash[0], v.y * squash[1], v.z * squash[2]);
+      if (tint) {
+        const b = 0.7 + 0.42 * (n.y * 0.5 + 0.5) + 0.06 * Math.sin(n.x * 11 + n.z * 13 + p[2]); // darker underneath, lighter on top
+        shades.push(b, b, b);
+      }
       if (moss) {
         const k = Math.min(1, Math.max(0, (n.y * 0.9 + n.x * 0.5 + 0.35 * Math.sin(n.x * 7 + n.z * 9 + p[1]) - 0.35) * 2.2));
         const c = stoneGrey.clone().lerp(mossGreen, k * 0.85);
         shades.push(c.r, c.g, c.b);
       }
     }
-    if (moss) g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
+    if (moss || tint) g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
     g.computeVertexNormals();
     return g;
   };
@@ -174,6 +178,25 @@ function start() {
       ctx.fillStyle = shade;
       ctx.fillRect(px(s.x - s.r * 2), px(s.z - s.r * 2), len(s.r * 4), len(s.r * 4));
     }
+    // a tight dark crease right at each stone's base
+    for (const s of stones) {
+      const crease = ctx.createRadialGradient(px(s.x), px(s.z), len(s.r * 0.9), px(s.x), px(s.z), len(s.r * 1.22));
+      crease.addColorStop(0, 'rgba(35, 26, 14, 0.6)');
+      crease.addColorStop(1, 'rgba(35, 26, 14, 0)');
+      ctx.fillStyle = crease;
+      ctx.fillRect(px(s.x - s.r * 2), px(s.z - s.r * 2), len(s.r * 4), len(s.r * 4));
+    }
+    // sand is never one even tone: broad soft patches, a few percent lighter or darker
+    for (let i = 0; i < 46; i++) {
+      const x = Math.random() * SIZE;
+      const y = Math.random() * SIZE;
+      const r = SIZE * (0.05 + Math.random() * 0.1);
+      const patch = ctx.createRadialGradient(x, y, 0, x, y, r);
+      patch.addColorStop(0, i % 2 ? 'rgba(70, 52, 28, 0.07)' : 'rgba(255, 250, 235, 0.09)');
+      patch.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = patch;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
     speckle(ctx, grains, ['rgba(90, 72, 45, 0.16)', 'rgba(255, 248, 230, 0.2)', 'rgba(60, 48, 30, 0.1)']);
   }
   const colourMap = new THREE.CanvasTexture(colourSheet);
@@ -197,10 +220,10 @@ function start() {
       h.stroke();
     }
     h.filter = 'none';
-    speckle(h, grains * 1.5, ['rgba(255, 255, 255, 0.07)', 'rgba(0, 0, 0, 0.07)']);
+    speckle(h, grains * 2.5, ['rgba(255, 255, 255, 0.09)', 'rgba(0, 0, 0, 0.09)']);
     const src = h.getImageData(0, 0, SIZE, SIZE).data;
     const out = new ImageData(SIZE, SIZE);
-    const strength = SIZE / 190;
+    const strength = SIZE / 150;
     const at = (x, y) => src[(Math.min(SIZE - 1, Math.max(0, y)) * SIZE + Math.min(SIZE - 1, Math.max(0, x))) * 4] / 255;
     for (let y = 0; y < SIZE; y++) {
       for (let x = 0; x < SIZE; x++) {
@@ -231,34 +254,35 @@ function start() {
   const flatAt = sandShape.attributes.position;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, flatAt.getX(i) / EXTENT / 2 + 0.5, flatAt.getY(i) / EXTENT / 2 + 0.5);
   sandShape.rotateX(-Math.PI / 2);
-  const sand = new THREE.Mesh(sandShape, new THREE.MeshStandardMaterial({ map: colourMap, normalMap, roughness: 1 }));
+  const sand = new THREE.Mesh(sandShape, new THREE.MeshStandardMaterial({ map: colourMap, normalMap, roughness: 1, metalness: 0 }));
   sand.receiveShadow = true;
   island.add(sand);
 
   // The rock: a low uneven kerb around the sand, then a craggy mass that
   // starts at the full width of the garden and tapers to a point.
-  const rockLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96 });
+  const rockLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, flatShading: true }); // flat faces read as broken stone
   {
-    const rings = [[0.975, 0.0], [0.992, 0.08], [1.03, 0.075], [1.05, -0.06]];
+    const rings = [[0.975, 0.0], [0.99, 0.07], [1.015, 0.065], [1.03, -0.05]];
     for (let k = 1; k <= 30; k++) {
       const v = k / 30;
-      rings.push([1.05 * (1 - v) ** 0.72, -0.06 - 5.25 * v]);
+      rings.push([1.03 * (1 - v) ** 0.78, -0.05 - 5.4 * v]);
     }
-    const T = 144;
+    const T = 96;
+    const ridge = (x) => 1 - Math.abs(Math.sin(x)) - 0.5; // sharp crests instead of soft lumps
     const spots = [];
     const shades = [];
     const faces = [];
-    const base = new THREE.Color('#756e63');
+    const base = new THREE.Color('#6d6862');
     rings.forEach(([f, y0], i) => {
       const crag = Math.min(1, Math.max(0, (i - 2) / 3)); // the kerb stays close to the outline
       for (let j = 0; j <= T; j++) {
         const a = (j / T) * Math.PI * 2;
         const ledge = 0.045 * Math.sign(Math.sin(y0 * 5.2 + phase[2] + 0.6 * Math.sin(3 * a))); // stepped layers of rock
-        const wob = 1 + crag * (0.13 * Math.sin(3 * a + 1.3 * y0 + phase[0]) + 0.09 * Math.sin(7 * a - 2.1 * y0 + phase[1]) + 0.05 * Math.sin(13 * a + 4 * y0 + phase[2]) + 0.025 * Math.sin(23 * a + 9 * y0) + ledge);
+        const wob = 1 + crag * (0.2 * ridge(1.5 * a + 0.9 * y0 + phase[0]) + 0.13 * ridge(3.5 * a - 1.6 * y0 + phase[1]) + 0.07 * ridge(6.5 * a + 3 * y0 + phase[2]) + ledge);
         const r = rimAt(a) * f * wob;
         const y = y0 + crag * 0.14 * Math.sin(5 * a + y0 * 2 + phase[3]) + (i === 1 || i === 2 ? 0.045 * Math.sin(9 * a + phase[1]) + 0.03 * Math.sin(23 * a + phase[2]) - 0.09 * Math.max(0, Math.sin(4 * a + phase[3]) - 0.82) * 5 : 0); // an uneven, chipped kerb
         spots.push(Math.cos(a) * r, y, Math.sin(a) * r);
-        const band = (0.84 + 0.16 * Math.sin(y * 5.5 + a * 0.8 + phase[0]) + (i < 4 ? 0.14 : 0)) * (1 + Math.max(-0.42, y0 * 0.085)); // strata, a paler kerb, darker toward the tip
+        const band = (0.84 + 0.16 * Math.sin(y * 5.5 + a * 0.8 + phase[0]) + (i < 4 ? 0.14 : 0)) * (1 + Math.max(-0.5, y0 * 0.1)) * (i >= 4 && i <= 6 ? 0.78 : 1); // strata, a paler kerb, shade under the lip, darker toward the tip
         shades.push(base.r * band, base.g * band, base.b * band);
       }
     });
@@ -297,33 +321,22 @@ function start() {
   rockLook.bumpMap = gritMap;
   rockLook.bumpScale = 1.4;
 
-  const stoneLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, bumpMap: gritMap, bumpScale: 1.1 });
+  const stoneLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, bumpMap: gritMap, bumpScale: 1.9 });
   for (const s of stones) {
     const mesh = new THREE.Mesh(lump(s.r, 0.1, s.squash, { cuts: 3, moss: true }), stoneLook);
-    mesh.position.set(s.x, s.r * s.squash[1] * 0.3, s.z); // sunk into the sand
+    mesh.position.set(s.x, s.r * s.squash[1] * 0.22, s.z); // bedded into the sand
     mesh.rotation.set(between(-0.12, 0.12), rand() * 6, between(-0.12, 0.12));
     mesh.castShadow = mesh.receiveShadow = true;
     island.add(mesh);
   }
-  // A few small stones lie where the sand meets the kerb.
-  const pebbleLook = new THREE.MeshStandardMaterial({ color: '#847d71', roughness: 0.95 });
-  for (let i = 0; i < 12; i++) {
-    const a = rand() * 6.28;
-    const r = between(0.05, 0.11);
-    const mesh = new THREE.Mesh(lump(r, 0.2, [1, 0.65, between(0.7, 1.1)], { detail: 10 }), pebbleLook);
-    mesh.position.set(Math.cos(a) * rimAt(a) * 0.945, r * 0.25, Math.sin(a) * rimAt(a) * 0.945);
-    mesh.castShadow = true;
-    island.add(mesh);
-  }
-
-  // Two small fragments of the same rock drift below the island, and stars.
-  const fragmentLook = new THREE.MeshStandardMaterial({ color: '#6b655b', roughness: 0.96 });
+  // Three small fragments of the same rock hang together below the tip.
+  const fragmentLook = new THREE.MeshStandardMaterial({ color: '#66615a', roughness: 0.96, flatShading: true });
   const drifters = [];
-  for (let i = 0; i < 2; i++) {
-    const mesh = new THREE.Mesh(lump(between(0.14, 0.24), 0.28, [1, between(0.6, 0.9), between(0.7, 1.1)], { cuts: 2, detail: 16 }), fragmentLook);
-    mesh.userData = { far: between(R * 0.5, R * 0.9), turn: rand() * 6.28, speed: between(0.01, 0.02), height: between(-4.6, -3.2) };
+  for (const size of [0.26, 0.16, 0.1]) {
+    const mesh = new THREE.Mesh(lump(size, 0.3, [1, between(0.6, 0.9), between(0.7, 1.1)], { cuts: 3, detail: 9 }), fragmentLook);
+    mesh.userData = { far: between(0.35, 1.0), turn: rand() * 6.28, speed: between(0.006, 0.012), height: between(-6.3, -5.7) };
     drifters.push(mesh);
-    scene.add(mesh);
+    island.add(mesh);
   }
   const dot = document.createElement('canvas');
   dot.width = dot.height = 32;
@@ -359,8 +372,8 @@ function start() {
 
   // Trees: pruned garden trees built from a few uneven clumps.
   const bark = new THREE.MeshStandardMaterial({ color: '#5b4936', roughness: 1 });
-  const needles = [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ roughness: 1 })); // darker low, lighter high
-  const leaves = [0, 1].map(() => new THREE.MeshStandardMaterial({ roughness: 1 }));
+  const needles = [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true })); // darker low, lighter high
+  const leaves = [0, 1].map(() => new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }));
   const key = `space-garden:${location.pathname}`;
   let trees = [];
   try {
@@ -377,28 +390,35 @@ function start() {
       g.add(mesh);
       return mesh;
     };
-    const clump = (radius, material, x, y, z, flat) => part(lump(radius, 0.16, [1, flat, 1], { rnd: pick, detail: 14 }), material, x, y, z).rotation.set(0, pick() * 6, (pick() - 0.5) * 0.3);
+    const clump = (radius, material, x, y, z, flat) => part(lump(radius, 0.3, [1 + (pick() - 0.5) * 0.3, flat, 1 + (pick() - 0.5) * 0.3], { rnd: pick, detail: 16, tint: true }), material, x, y, z).rotation.set((pick() - 0.5) * 0.4, pick() * 6, (pick() - 0.5) * 0.4);
+    // a trunk in two pieces, so it bends
     const trunk = (height, lean) => {
-      const mesh = part(new THREE.CylinderGeometry(h * 0.022, h * 0.075, height, 9), bark, lean * height * 0.5, height * 0.5, 0);
-      mesh.rotation.z = -lean;
+      const low = part(new THREE.CylinderGeometry(h * 0.04, h * 0.08, height * 0.55, 9), bark, lean * height * 0.14, height * 0.27, 0);
+      low.rotation.z = -lean;
+      const high = part(new THREE.CylinderGeometry(h * 0.02, h * 0.04, height * 0.5, 9), bark, lean * height * 0.2, height * 0.74, 0);
+      high.rotation.z = lean * 0.7;
     };
+    const off = () => (pick() - 0.5) * h * 0.16;
     if (tree.t === 0) {
-      // pine: layered pads of needles that narrow toward the top
-      trunk(h * 0.8, 0.05);
+      // pine: uneven drooping pads of needles that narrow toward the top
+      trunk(h * 0.85, 0.07);
       for (let i = 0; i < 5; i++) {
-        const wide = h * (0.32 - i * 0.055);
-        clump(wide, needles[Math.min(2, Math.floor(i / 2))], (pick() - 0.5) * h * 0.08, h * (0.36 + i * 0.15), (pick() - 0.5) * h * 0.08, 0.42);
+        const wide = h * (0.33 - i * 0.055) * (0.85 + pick() * 0.3);
+        clump(wide, needles[Math.min(2, Math.floor(i / 2))], off(), h * (0.36 + i * 0.15), off(), 0.4);
+        if (i < 3) clump(wide * 0.55, needles[Math.min(2, Math.floor(i / 2))], off() * 2.4, h * (0.33 + i * 0.15), off() * 2.4, 0.4);
       }
     } else if (tree.t === 1) {
-      // cloud-pruned tree: a leaning trunk carrying a few flat pads of leaves
-      trunk(h * 0.72, 0.2);
-      clump(h * 0.3, leaves[1], h * 0.14, h * 0.76, 0, 0.55);
-      clump(h * 0.21, leaves[0], -h * 0.2, h * 0.55, h * 0.08, 0.55);
-      clump(h * 0.18, leaves[0], h * 0.36, h * 0.52, -h * 0.1, 0.55);
-      clump(h * 0.15, leaves[1], h * 0.04, h * 0.96, h * 0.05, 0.6);
+      // cloud-pruned tree: a bent trunk carrying flat pads of leaves, each off to one side
+      trunk(h * 0.74, 0.24);
+      clump(h * 0.3, leaves[1], h * 0.1 + off(), h * 0.78, off(), 0.5);
+      clump(h * 0.22, leaves[0], -h * 0.24, h * 0.56, h * 0.08 + off(), 0.5);
+      clump(h * 0.19, leaves[0], h * 0.36, h * 0.5, -h * 0.1 + off(), 0.5);
+      clump(h * 0.15, leaves[1], off(), h * 0.97, off(), 0.55);
+      clump(h * 0.12, leaves[0], -h * 0.3 + off(), h * 0.8, -h * 0.16, 0.5);
     } else {
-      // a single low mound of shrub
-      clump(h * 0.3, leaves[0], 0, h * 0.12, 0, 0.55);
+      // a low mound of shrub
+      clump(h * 0.3, leaves[0], 0, h * 0.11, 0, 0.5);
+      clump(h * 0.17, leaves[1], h * 0.2, h * 0.1, h * 0.1, 0.5);
     }
     g.position.set(tree.x, 0, tree.z);
     g.rotation.set((pick() - 0.5) * 0.1, pick() * 6, (pick() - 0.5) * 0.1);
@@ -411,7 +431,7 @@ function start() {
   // The gardener: tiny and solid, in work clothes and a straw hat.
   const cloth = new THREE.MeshStandardMaterial({ color: '#3b4654', roughness: 1 });
   const skin = new THREE.MeshStandardMaterial({ color: '#c9b08e', roughness: 1 });
-  const straw = new THREE.MeshStandardMaterial({ color: '#c9b27c', roughness: 1 });
+  const straw = new THREE.MeshStandardMaterial({ color: '#e3d09c', roughness: 1 });
   const wood = new THREE.MeshStandardMaterial({ color: '#6a5540', roughness: 1 });
   const solid = (geometry, material, parent, x = 0, y = 0, z = 0) => {
     const mesh = new THREE.Mesh(geometry, material);
@@ -425,7 +445,7 @@ function start() {
   torso.position.y = 0.2;
   solid(new THREE.CapsuleGeometry(0.05, 0.12, 4, 10), cloth, torso, 0, 0.11);
   solid(new THREE.SphereGeometry(0.042, 14, 10), skin, torso, 0, 0.255);
-  solid(new THREE.ConeGeometry(0.1, 0.045, 14), straw, torso, 0, 0.3);
+  solid(new THREE.ConeGeometry(0.125, 0.05, 14), straw, torso, 0, 0.3);
   const arm = solid(new THREE.CapsuleGeometry(0.016, 0.1, 3, 6).translate(0, -0.06, 0), cloth, torso, 0.03, 0.18, 0.04);
   arm.rotation.z = 1.0;
   const rakeTool = solid(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6).translate(0, -0.25, 0), wood, torso, 0.12, 0.26, 0.04);
@@ -525,10 +545,12 @@ function start() {
     back.color.set(night ? '#7b9cf0' : '#ffdcb8');
     back.intensity = night ? 1.6 : 0.5;
     under.color.set(night ? '#5d78c4' : '#e8d5b5');
-    under.intensity = night ? 0.9 : 0.3;
+    under.intensity = night ? 1.35 : 0.3;
+    sand.material.roughness = night ? 0.74 : 1; // a faint silver sheen on the ridges under the moon
+    canvas.classList.toggle('space-night', night);
     // foliage is muted by day and leans blue-green under the moon so it still reads
-    ['#3f5a44', '#4c6650', '#5a745a'].forEach((c, i) => needles[i].color.set(night ? ['#3f5a52', '#4a665c', '#55736a'][i] : c));
-    ['#667755', '#78876a'].forEach((c, i) => leaves[i].color.set(night ? ['#566e62', '#627a6e'][i] : c));
+    ['#3f5a44', '#4c6650', '#5a745a'].forEach((c, i) => needles[i].color.set(night ? ['#4a5a48', '#566650', '#62735a'][i] : c));
+    ['#667755', '#78876a'].forEach((c, i) => leaves[i].color.set(night ? ['#5e6b52', '#6b785e'][i] : c));
     for (const look of starLooks) look.opacity = night ? 0.95 : 0; // no stars by day
     renderer.toneMappingExposure = night ? 0.9 : 1;
     draw();
@@ -550,8 +572,8 @@ function start() {
     camera.aspect = w / h;
     camera.position.set(0, 0.46, 0.89).multiplyScalar(distance);
     camera.lookAt(0, -0.9, 0);
-    const cx = wide ? w - gutter / 2 - 16 : w * 0.5;
-    const cy = wide ? h * 0.5 : h * 0.9;
+    const cx = wide ? w - gutter / 2 - 36 : w * 0.5;
+    const cy = wide ? h * 0.5 : h * 0.93;
     camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
     camera.updateProjectionMatrix();
     draw();
