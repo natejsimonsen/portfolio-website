@@ -277,8 +277,7 @@ function start() {
       const crag = Math.min(1, Math.max(0, (i - 2) / 3)); // the kerb stays close to the outline
       for (let j = 0; j <= T; j++) {
         const a = (j / T) * Math.PI * 2;
-        const ledge = 0.045 * Math.sign(Math.sin(y0 * 5.2 + phase[2] + 0.6 * Math.sin(3 * a))); // stepped layers of rock
-        const wob = 1 + crag * (0.2 * ridge(1.5 * a + 0.9 * y0 + phase[0]) + 0.13 * ridge(3.5 * a - 1.6 * y0 + phase[1]) + 0.07 * ridge(6.5 * a + 3 * y0 + phase[2]) + ledge);
+        const wob = 1 + crag * (0.2 * ridge(1.5 * a + 0.9 * y0 + phase[0]) + 0.13 * ridge(3.5 * a - 1.6 * y0 + phase[1]) + 0.07 * ridge(6.5 * a + 3 * y0 + phase[2]));
         const r = rimAt(a) * f * wob;
         const y = y0 + crag * 0.14 * Math.sin(5 * a + y0 * 2 + phase[3]) + (i === 1 || i === 2 ? 0.045 * Math.sin(9 * a + phase[1]) + 0.03 * Math.sin(23 * a + phase[2]) - 0.09 * Math.max(0, Math.sin(4 * a + phase[3]) - 0.82) * 5 : 0); // an uneven, chipped kerb
         spots.push(Math.cos(a) * r, y, Math.sin(a) * r);
@@ -567,13 +566,13 @@ function start() {
     canvas.classList.toggle('space-low', !wide);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(w, h, false);
-    const across = wide ? Math.min(gutter - 92, h * 0.6) : w * 0.6; // island width in px
+    const across = wide ? Math.min(gutter - 92, h * 0.6) : w * 0.5; // island width in px
     const distance = (2.75 * R * h) / (across * 2 * Math.tan((camera.fov * Math.PI) / 360));
     camera.aspect = w / h;
     camera.position.set(0, 0.46, 0.89).multiplyScalar(distance);
     camera.lookAt(0, -0.9, 0);
     const cx = wide ? w - gutter / 2 - 36 : w * 0.5;
-    const cy = wide ? h * 0.5 : h * 0.93;
+    const cy = wide ? h * 0.44 : h * 0.86; // on phones the whole rock, tip included, stays in view
     camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
     camera.updateProjectionMatrix();
     draw();
