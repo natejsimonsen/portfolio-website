@@ -48,14 +48,16 @@ function start() {
   sun.position.set(-9, 6.5, 4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 1, far: 40 });
+  Object.assign(sun.shadow.camera, { left: -6.2, right: 6.2, top: 6.2, bottom: -6.2, near: 1, far: 40 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
-  sun.shadow.radius = 4;
+  sun.shadow.radius = 6;
   const sky = new THREE.HemisphereLight();
   const back = new THREE.DirectionalLight();
   back.position.set(7, -4, -8);
-  scene.add(sun, sky, back);
+  const under = new THREE.DirectionalLight(); // faint fill so the underside keeps its shape
+  under.position.set(3, -6, 9);
+  scene.add(sun, sky, back, under);
 
   const island = new THREE.Group();
   scene.add(island);
@@ -64,18 +66,36 @@ function start() {
   const rimAt = (a) => R * (1 + 0.05 * Math.sin(2 * a + phase[0]) + 0.03 * Math.sin(3 * a + phase[1]) + 0.018 * Math.sin(5 * a + phase[2]));
   const inside = (x, z, pad) => Math.hypot(x, z) < rimAt(Math.atan2(z, x)) - pad;
 
-  // A lumpy round shape with smooth shading: stones, moss, rock fragments.
-  const lump = (radius, amount, squash = [1, 1, 1]) => {
-    const g = new THREE.SphereGeometry(radius, 36, 26);
+  // A lumpy round shape with smooth shading: stones, moss-covered rocks,
+  // tree crowns, fragments. `cuts` slices a few flat faces into it, and
+  // `moss` tints the upper, shaded side green.
+  const stoneGrey = new THREE.Color('#8f897e');
+  const mossGreen = new THREE.Color('#5f6b48');
+  const lump = (radius, amount, squash = [1, 1, 1], { rnd = rand, cuts = 0, moss = false, detail = 36 } = {}) => {
+    const g = new THREE.SphereGeometry(radius, detail, Math.round(detail * 0.72));
     const at = g.attributes.position;
     const v = new THREE.Vector3();
-    const p = [rand() * 9, rand() * 9, rand() * 9];
+    const p = [rnd() * 9, rnd() * 9, rnd() * 9];
+    const planes = [];
+    for (let i = 0; i < cuts; i++) planes.push({ n: new THREE.Vector3(rnd() - 0.5, rnd() * 0.7 + 0.1, rnd() - 0.5).normalize(), d: radius * (0.62 + rnd() * 0.2) });
+    const shades = [];
     for (let i = 0; i < at.count; i++) {
       v.fromBufferAttribute(at, i);
       const n = v.clone().divideScalar(radius);
       const d = 1 + amount * (Math.sin(n.x * 2.3 + p[0]) * Math.cos(n.y * 2.9 + p[1]) + 0.55 * Math.sin(n.z * 4.6 + n.x * 3.1 + p[2]) + 0.3 * Math.sin(n.y * 9 + n.z * 7 + p[0]));
-      at.setXYZ(i, v.x * d * squash[0], v.y * d * squash[1], v.z * d * squash[2]);
+      v.multiplyScalar(d);
+      for (const plane of planes) {
+        const over = v.dot(plane.n) - plane.d;
+        if (over > 0) v.addScaledVector(plane.n, -over);
+      }
+      at.setXYZ(i, v.x * squash[0], v.y * squash[1], v.z * squash[2]);
+      if (moss) {
+        const k = Math.min(1, Math.max(0, (n.y * 0.9 + n.x * 0.5 + 0.35 * Math.sin(n.x * 7 + n.z * 9 + p[1]) - 0.35) * 2.2));
+        const c = stoneGrey.clone().lerp(mossGreen, k * 0.85);
+        shades.push(c.r, c.g, c.b);
+      }
     }
+    if (moss) g.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
     g.computeVertexNormals();
     return g;
   };
@@ -103,19 +123,26 @@ function start() {
   };
   const rake = (ctx, colour, flat, width) => {
     ctx.strokeStyle = colour;
-    ctx.lineWidth = len(width);
     ctx.lineCap = 'round';
+    let row = 0;
     for (let z = -EXTENT; z <= EXTENT; z += SPACING) {
+      row++;
+      ctx.lineWidth = len(width * (1 + 0.14 * Math.sin(row * 2.7 + phase[1]))); // the rake is never perfectly even
       ctx.beginPath();
-      for (let x = -EXTENT; x <= EXTENT; x += 0.1) ctx.lineTo(px(x), px(z + 0.014 * Math.sin(x * 1.3 + phase[3] + z)));
+      for (let x = -EXTENT; x <= EXTENT; x += 0.08) ctx.lineTo(px(x), px(z + 0.022 * Math.sin(x * 1.3 + phase[3] + z) + 0.012 * Math.sin(x * 4.1 + row)));
       ctx.stroke();
     }
     for (const s of stones) {
       if (!s.rings) continue;
-      ctx.fillStyle = flat;
+      // clear the straight rows around the stone, feathered at the edge
+      const edge = ctx.createRadialGradient(px(s.x), px(s.z), len(s.field + SPACING * 0.2), px(s.x), px(s.z), len(s.field + SPACING * 1.1));
+      edge.addColorStop(0, flat);
+      edge.addColorStop(1, flat.replace(/[\d.]+\)$/, '0)'));
+      ctx.fillStyle = edge;
       ctx.beginPath();
-      ctx.arc(px(s.x), px(s.z), len(s.field + SPACING * 0.5), 0, 7);
+      ctx.arc(px(s.x), px(s.z), len(s.field + SPACING * 1.1), 0, 7);
       ctx.fill();
+      ctx.lineWidth = len(width);
       for (let k = 0; k < s.rings; k++) {
         ctx.beginPath();
         ctx.arc(px(s.x), px(s.z), len(s.r * 1.05 + 0.12 + (k + 0.5) * SPACING), 0, 7);
@@ -137,12 +164,12 @@ function start() {
     ctx.fillStyle = '#d6c6a3';
     ctx.fillRect(0, 0, SIZE, SIZE);
     ctx.filter = `blur(${SIZE / 700}px)`;
-    rake(ctx, 'rgba(110, 88, 55, 0.2)', '#d6c6a3', 0.1);
+    rake(ctx, 'rgba(110, 88, 55, 0.2)', 'rgba(214, 198, 163, 1)', 0.1);
     ctx.filter = 'none';
     // soft dark where each stone meets the sand
     for (const s of stones) {
       const shade = ctx.createRadialGradient(px(s.x), px(s.z), len(s.r * 0.5), px(s.x), px(s.z), len(s.r * 1.7));
-      shade.addColorStop(0, 'rgba(50, 38, 20, 0.5)');
+      shade.addColorStop(0, 'rgba(50, 38, 20, 0.62)');
       shade.addColorStop(1, 'rgba(50, 38, 20, 0)');
       ctx.fillStyle = shade;
       ctx.fillRect(px(s.x - s.r * 2), px(s.z - s.r * 2), len(s.r * 4), len(s.r * 4));
@@ -159,13 +186,21 @@ function start() {
     const h = heights.getContext('2d');
     h.fillStyle = '#a0a0a0';
     h.fillRect(0, 0, SIZE, SIZE);
-    h.filter = `blur(${SIZE / 620}px)`;
-    rake(h, '#303030', '#a0a0a0', 0.115);
+    h.filter = `blur(${SIZE / 330}px)`; // a wide blur turns each line into a rounded trough
+    rake(h, 'rgba(20, 20, 20, 1)', 'rgba(160, 160, 160, 1)', 0.12);
+    // a low mound of sand pushed up around each stone
+    for (const s of stones) {
+      h.strokeStyle = 'rgba(235, 235, 235, 0.8)';
+      h.lineWidth = len(0.1);
+      h.beginPath();
+      h.arc(px(s.x), px(s.z), len(s.r * 1.08), 0, 7);
+      h.stroke();
+    }
     h.filter = 'none';
     speckle(h, grains * 1.5, ['rgba(255, 255, 255, 0.07)', 'rgba(0, 0, 0, 0.07)']);
     const src = h.getImageData(0, 0, SIZE, SIZE).data;
     const out = new ImageData(SIZE, SIZE);
-    const strength = SIZE / 300;
+    const strength = SIZE / 190;
     const at = (x, y) => src[(Math.min(SIZE - 1, Math.max(0, y)) * SIZE + Math.min(SIZE - 1, Math.max(0, x))) * 4] / 255;
     for (let y = 0; y < SIZE; y++) {
       for (let x = 0; x < SIZE; x++) {
@@ -204,10 +239,11 @@ function start() {
   // starts at the full width of the garden and tapers to a point.
   const rockLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96 });
   {
-    const rings = [
-      [0.975, 0.0], [0.992, 0.08], [1.03, 0.075], [1.05, -0.06], [1.03, -0.35], [0.97, -0.8], [0.89, -1.3], [0.78, -1.85],
-      [0.66, -2.4], [0.53, -2.95], [0.4, -3.5], [0.28, -4.05], [0.16, -4.55], [0.07, -4.95], [0.0, -5.25],
-    ];
+    const rings = [[0.975, 0.0], [0.992, 0.08], [1.03, 0.075], [1.05, -0.06]];
+    for (let k = 1; k <= 30; k++) {
+      const v = k / 30;
+      rings.push([1.05 * (1 - v) ** 0.72, -0.06 - 5.25 * v]);
+    }
     const T = 144;
     const spots = [];
     const shades = [];
@@ -217,11 +253,12 @@ function start() {
       const crag = Math.min(1, Math.max(0, (i - 2) / 3)); // the kerb stays close to the outline
       for (let j = 0; j <= T; j++) {
         const a = (j / T) * Math.PI * 2;
-        const wob = 1 + crag * (0.13 * Math.sin(3 * a + 1.3 * y0 + phase[0]) + 0.09 * Math.sin(7 * a - 2.1 * y0 + phase[1]) + 0.05 * Math.sin(13 * a + 4 * y0 + phase[2]) + 0.025 * Math.sin(23 * a + 9 * y0));
+        const ledge = 0.045 * Math.sign(Math.sin(y0 * 5.2 + phase[2] + 0.6 * Math.sin(3 * a))); // stepped layers of rock
+        const wob = 1 + crag * (0.13 * Math.sin(3 * a + 1.3 * y0 + phase[0]) + 0.09 * Math.sin(7 * a - 2.1 * y0 + phase[1]) + 0.05 * Math.sin(13 * a + 4 * y0 + phase[2]) + 0.025 * Math.sin(23 * a + 9 * y0) + ledge);
         const r = rimAt(a) * f * wob;
-        const y = y0 + crag * 0.14 * Math.sin(5 * a + y0 * 2 + phase[3]) + (i === 1 || i === 2 ? 0.035 * Math.sin(9 * a + phase[1]) + 0.02 * Math.sin(17 * a + phase[2]) : 0);
+        const y = y0 + crag * 0.14 * Math.sin(5 * a + y0 * 2 + phase[3]) + (i === 1 || i === 2 ? 0.045 * Math.sin(9 * a + phase[1]) + 0.03 * Math.sin(23 * a + phase[2]) - 0.09 * Math.max(0, Math.sin(4 * a + phase[3]) - 0.82) * 5 : 0); // an uneven, chipped kerb
         spots.push(Math.cos(a) * r, y, Math.sin(a) * r);
-        const band = 0.84 + 0.16 * Math.sin(y * 5.5 + a * 0.8 + phase[0]) + (i < 4 ? 0.14 : 0); // strata, and a paler kerb
+        const band = (0.84 + 0.16 * Math.sin(y * 5.5 + a * 0.8 + phase[0]) + (i < 4 ? 0.14 : 0)) * (1 + Math.max(-0.42, y0 * 0.085)); // strata, a paler kerb, darker toward the tip
         shades.push(base.r * band, base.g * band, base.b * band);
       }
     });
@@ -242,49 +279,88 @@ function start() {
     island.add(body);
   }
 
-  const stoneLook = new THREE.MeshStandardMaterial({ color: '#8d877c', roughness: 0.88 });
-  const mossLook = new THREE.MeshStandardMaterial({ color: '#56643f', roughness: 1 });
+  // A fine bumpy surface shared by the stones and the rock.
+  const grit = document.createElement('canvas');
+  grit.width = grit.height = 256;
+  {
+    const g = grit.getContext('2d');
+    g.fillStyle = '#808080';
+    g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 5000; i++) {
+      g.fillStyle = i % 2 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.16)';
+      g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    }
+  }
+  const gritMap = new THREE.CanvasTexture(grit);
+  gritMap.wrapS = gritMap.wrapT = THREE.RepeatWrapping;
+  gritMap.repeat.set(5, 3);
+  rockLook.bumpMap = gritMap;
+  rockLook.bumpScale = 1.4;
+
+  const stoneLook = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, bumpMap: gritMap, bumpScale: 1.1 });
   for (const s of stones) {
-    const mesh = new THREE.Mesh(lump(s.r, 0.1, s.squash), stoneLook);
-    mesh.position.set(s.x, s.r * s.squash[1] * 0.42, s.z); // sunk a little into the sand
-    mesh.rotation.y = rand() * 6;
+    const mesh = new THREE.Mesh(lump(s.r, 0.1, s.squash, { cuts: 3, moss: true }), stoneLook);
+    mesh.position.set(s.x, s.r * s.squash[1] * 0.3, s.z); // sunk into the sand
+    mesh.rotation.set(between(-0.12, 0.12), rand() * 6, between(-0.12, 0.12));
     mesh.castShadow = mesh.receiveShadow = true;
     island.add(mesh);
-    if (!s.rings) continue;
-    const patch = new THREE.Mesh(lump(s.r * 0.9, 0.22, [1.25, 0.1, 1.2]), mossLook);
-    patch.position.set(s.x + s.r * 0.25, 0.0, s.z + s.r * 0.2);
-    patch.receiveShadow = true;
-    island.add(patch);
+  }
+  // A few small stones lie where the sand meets the kerb.
+  const pebbleLook = new THREE.MeshStandardMaterial({ color: '#847d71', roughness: 0.95 });
+  for (let i = 0; i < 12; i++) {
+    const a = rand() * 6.28;
+    const r = between(0.05, 0.11);
+    const mesh = new THREE.Mesh(lump(r, 0.2, [1, 0.65, between(0.7, 1.1)], { detail: 10 }), pebbleLook);
+    mesh.position.set(Math.cos(a) * rimAt(a) * 0.945, r * 0.25, Math.sin(a) * rimAt(a) * 0.945);
+    mesh.castShadow = true;
+    island.add(mesh);
   }
 
   // Two small fragments of the same rock drift below the island, and stars.
   const fragmentLook = new THREE.MeshStandardMaterial({ color: '#6b655b', roughness: 0.96 });
   const drifters = [];
   for (let i = 0; i < 2; i++) {
-    const mesh = new THREE.Mesh(lump(between(0.14, 0.24), 0.28, [1, between(0.6, 0.9), between(0.7, 1.1)]), fragmentLook);
+    const mesh = new THREE.Mesh(lump(between(0.14, 0.24), 0.28, [1, between(0.6, 0.9), between(0.7, 1.1)], { cuts: 2, detail: 16 }), fragmentLook);
     mesh.userData = { far: between(R * 0.5, R * 0.9), turn: rand() * 6.28, speed: between(0.01, 0.02), height: between(-4.6, -3.2) };
     drifters.push(mesh);
     scene.add(mesh);
   }
-  const starSpots = [];
-  const starShades = [];
-  for (let i = 0; i < 1400; i++) {
-    const v = new THREE.Vector3().setFromSphericalCoords(140, Math.acos(2 * Math.random() - 1), Math.random() * Math.PI * 2);
-    starSpots.push(v.x, v.y, v.z);
-    const b = 0.25 + Math.random() ** 3 * 0.75;
-    starShades.push(b, b, b);
+  const dot = document.createElement('canvas');
+  dot.width = dot.height = 32;
+  {
+    const g = dot.getContext('2d');
+    const glow = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    glow.addColorStop(0.45, 'rgba(255, 255, 255, 0.55)');
+    glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, 32, 32);
   }
-  const starShape = new THREE.BufferGeometry();
-  starShape.setAttribute('position', new THREE.Float32BufferAttribute(starSpots, 3));
-  starShape.setAttribute('color', new THREE.Float32BufferAttribute(starShades, 3));
-  const starLook = new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false });
-  const stars = new THREE.Points(starShape, starLook);
+  const dotMap = new THREE.CanvasTexture(dot);
+  const stars = new THREE.Group();
+  const starLooks = [];
+  for (const [count, size] of [[900, 2.2], [160, 3.6], [24, 5.5]]) {
+    const spots = [];
+    const shades = [];
+    for (let i = 0; i < count; i++) {
+      const v = new THREE.Vector3().setFromSphericalCoords(140, Math.acos(2 * Math.random() - 1), Math.random() * Math.PI * 2);
+      spots.push(v.x, v.y, v.z);
+      const b = 0.2 + Math.random() ** 2.5 * 0.8;
+      shades.push(b, b, b * (0.92 + Math.random() * 0.08));
+    }
+    const shape = new THREE.BufferGeometry();
+    shape.setAttribute('position', new THREE.Float32BufferAttribute(spots, 3));
+    shape.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
+    const look = new THREE.PointsMaterial({ size, sizeAttenuation: false, map: dotMap, vertexColors: true, transparent: true, depthWrite: false });
+    starLooks.push(look);
+    stars.add(new THREE.Points(shape, look));
+  }
   scene.add(stars);
 
   // Trees: pruned garden trees built from a few uneven clumps.
   const bark = new THREE.MeshStandardMaterial({ color: '#5b4936', roughness: 1 });
-  const needles = new THREE.MeshStandardMaterial({ color: '#4c6a45', roughness: 0.95, flatShading: true });
-  const leaves = new THREE.MeshStandardMaterial({ color: '#73895a', roughness: 0.95, flatShading: true });
+  const needles = [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ roughness: 1 })); // darker low, lighter high
+  const leaves = [0, 1].map(() => new THREE.MeshStandardMaterial({ roughness: 1 }));
   const key = `space-garden:${location.pathname}`;
   let trees = [];
   try {
@@ -301,36 +377,28 @@ function start() {
       g.add(mesh);
       return mesh;
     };
-    const clump = (radius, material, x, y, z, flat = 0.75) => {
-      const geometry = new THREE.IcosahedronGeometry(radius, 1);
-      const at = geometry.attributes.position;
-      for (let i = 0; i < at.count; i++) {
-        const k = 1 + 0.16 * Math.sin(at.getX(i) * 31 + at.getY(i) * 17 + at.getZ(i) * 23);
-        at.setXYZ(i, at.getX(i) * k, at.getY(i) * k * flat, at.getZ(i) * k);
-      }
-      geometry.computeVertexNormals();
-      part(geometry, material, x, y, z).rotation.y = pick() * 6;
+    const clump = (radius, material, x, y, z, flat) => part(lump(radius, 0.16, [1, flat, 1], { rnd: pick, detail: 14 }), material, x, y, z).rotation.set(0, pick() * 6, (pick() - 0.5) * 0.3);
+    const trunk = (height, lean) => {
+      const mesh = part(new THREE.CylinderGeometry(h * 0.022, h * 0.075, height, 9), bark, lean * height * 0.5, height * 0.5, 0);
+      mesh.rotation.z = -lean;
     };
     if (tree.t === 0) {
-      // pine: a flared trunk and four tiers, each turned and a little off centre
-      part(new THREE.CylinderGeometry(h * 0.025, h * 0.06, h * 0.45, 8), bark, 0, h * 0.22, 0);
-      for (let i = 0; i < 4; i++) {
-        const tier = part(new THREE.ConeGeometry(h * (0.3 - i * 0.055), h * 0.34, 7), needles, (pick() - 0.5) * h * 0.05, h * (0.42 + i * 0.17), (pick() - 0.5) * h * 0.05);
-        tier.rotation.set((pick() - 0.5) * 0.14, pick() * 6, (pick() - 0.5) * 0.14);
+      // pine: layered pads of needles that narrow toward the top
+      trunk(h * 0.8, 0.05);
+      for (let i = 0; i < 5; i++) {
+        const wide = h * (0.32 - i * 0.055);
+        clump(wide, needles[Math.min(2, Math.floor(i / 2))], (pick() - 0.5) * h * 0.08, h * (0.36 + i * 0.15), (pick() - 0.5) * h * 0.08, 0.42);
       }
     } else if (tree.t === 1) {
       // cloud-pruned tree: a leaning trunk carrying a few flat pads of leaves
-      const trunk = part(new THREE.CylinderGeometry(h * 0.03, h * 0.065, h * 0.7, 8), bark, h * 0.06, h * 0.34, 0);
-      trunk.rotation.z = -0.18;
-      clump(h * 0.3, leaves, h * 0.12, h * 0.74, 0, 0.6);
-      clump(h * 0.21, leaves, -h * 0.2, h * 0.56, h * 0.08, 0.6);
-      clump(h * 0.18, leaves, h * 0.34, h * 0.52, -h * 0.1, 0.6);
-      clump(h * 0.15, leaves, h * 0.02, h * 0.95, h * 0.05, 0.65);
+      trunk(h * 0.72, 0.2);
+      clump(h * 0.3, leaves[1], h * 0.14, h * 0.76, 0, 0.55);
+      clump(h * 0.21, leaves[0], -h * 0.2, h * 0.55, h * 0.08, 0.55);
+      clump(h * 0.18, leaves[0], h * 0.36, h * 0.52, -h * 0.1, 0.55);
+      clump(h * 0.15, leaves[1], h * 0.04, h * 0.96, h * 0.05, 0.6);
     } else {
-      // low shrub
-      clump(h * 0.24, leaves, 0, h * 0.13, 0, 0.7);
-      clump(h * 0.17, leaves, h * 0.24, h * 0.1, h * 0.06, 0.7);
-      clump(h * 0.14, leaves, -h * 0.18, h * 0.09, -h * 0.12, 0.7);
+      // a single low mound of shrub
+      clump(h * 0.3, leaves[0], 0, h * 0.12, 0, 0.55);
     }
     g.position.set(tree.x, 0, tree.z);
     g.rotation.set((pick() - 0.5) * 0.1, pick() * 6, (pick() - 0.5) * 0.1);
@@ -341,7 +409,7 @@ function start() {
   trees.forEach((tree) => buildTree(tree, true));
 
   // The gardener: tiny and solid, in work clothes and a straw hat.
-  const cloth = new THREE.MeshStandardMaterial({ color: '#4d5a6b', roughness: 1 });
+  const cloth = new THREE.MeshStandardMaterial({ color: '#3b4654', roughness: 1 });
   const skin = new THREE.MeshStandardMaterial({ color: '#c9b08e', roughness: 1 });
   const straw = new THREE.MeshStandardMaterial({ color: '#c9b27c', roughness: 1 });
   const wood = new THREE.MeshStandardMaterial({ color: '#6a5540', roughness: 1 });
@@ -449,16 +517,19 @@ function start() {
   const media = matchMedia('(prefers-color-scheme: dark)');
   const theme = () => {
     const night = (root.dataset.theme || (media.matches ? 'dark' : 'light')) === 'dark';
-    sun.color.set(night ? '#b6c6ff' : '#ffeed6');
-    sun.intensity = night ? 2.3 : 3.4;
-    sky.color.set(night ? '#42527c' : '#ffffff');
-    sky.groundColor.set(night ? '#131a30' : '#a89a7c');
-    sky.intensity = night ? 0.75 : 1.0;
+    sun.color.set(night ? '#bccaff' : '#ffeed6');
+    sun.intensity = night ? 3.3 : 3.4;
+    sky.color.set(night ? '#3a4a74' : '#ffffff');
+    sky.groundColor.set(night ? '#141b33' : '#a89a7c');
+    sky.intensity = night ? 0.5 : 1.15;
     back.color.set(night ? '#7b9cf0' : '#ffdcb8');
-    back.intensity = night ? 1.7 : 0.5;
-    starLook.color.set(night ? '#ffffff' : '#8a7f6e');
-    starLook.opacity = night ? 0.95 : 0.22;
-    starShape.setDrawRange(0, night ? 1400 : 380);
+    back.intensity = night ? 1.6 : 0.5;
+    under.color.set(night ? '#5d78c4' : '#e8d5b5');
+    under.intensity = night ? 0.9 : 0.3;
+    // foliage is muted by day and leans blue-green under the moon so it still reads
+    ['#3f5a44', '#4c6650', '#5a745a'].forEach((c, i) => needles[i].color.set(night ? ['#3f5a52', '#4a665c', '#55736a'][i] : c));
+    ['#667755', '#78876a'].forEach((c, i) => leaves[i].color.set(night ? ['#566e62', '#627a6e'][i] : c));
+    for (const look of starLooks) look.opacity = night ? 0.95 : 0; // no stars by day
     renderer.toneMappingExposure = night ? 0.9 : 1;
     draw();
   };
@@ -474,13 +545,13 @@ function start() {
     canvas.classList.toggle('space-low', !wide);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(w, h, false);
-    const across = wide ? Math.min(gutter - 64, h * 0.62) : w * 0.66; // island width in px
+    const across = wide ? Math.min(gutter - 92, h * 0.6) : w * 0.6; // island width in px
     const distance = (2.75 * R * h) / (across * 2 * Math.tan((camera.fov * Math.PI) / 360));
     camera.aspect = w / h;
     camera.position.set(0, 0.46, 0.89).multiplyScalar(distance);
     camera.lookAt(0, -0.9, 0);
-    const cx = wide ? w - gutter / 2 + 10 : w * 0.5;
-    const cy = wide ? h * 0.5 : h * 0.84;
+    const cx = wide ? w - gutter / 2 - 16 : w * 0.5;
+    const cy = wide ? h * 0.5 : h * 0.9;
     camera.setViewOffset(w, h, w / 2 - cx, h / 2 - cy, w, h);
     camera.updateProjectionMatrix();
     draw();

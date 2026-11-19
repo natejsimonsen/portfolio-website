@@ -328,8 +328,8 @@ main > section {
 }
 
 .space.space-low {
-  opacity: 0.38;
-  mask-image: linear-gradient(to bottom, transparent 30%, #000 75%);
+  opacity: 0.32;
+  mask-image: linear-gradient(to bottom, transparent 45%, #000 85%);
 }
 
 /* Room for short pages to end above the rock. */
